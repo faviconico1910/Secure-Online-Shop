@@ -1,4 +1,4 @@
 flask
 cryptography
 pycryptodome
-mysql-connector-python  # nếu dùng MySQL
+firebase_admin

@@ -1,0 +1,12 @@
+# Bỏ file key ra khỏi git
+serviceAccountKey.json
+
+# Python stuff
+__pycache__/
+*.pyc
+
+# Nếu m dùng dotenv
+.env
+
+# VS Code config (nếu có)
+.vscode/

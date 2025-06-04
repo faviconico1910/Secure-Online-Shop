@@ -1,26 +1,19 @@
 version: '3.8'
+
 services:
   app:
-    build:
-      context: ./app
-      dockerfile: Dockerfile
+    build: ./app
+    container_name: capybara-app
     ports:
       - "5000:5000"
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase_key
+    secrets:
+      - firebase_key
     volumes:
       - ./app:/app
-      # - ./certs:/certs
-    depends_on:
-      - db
-    environment:
-      - FLASK_ENV=development
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: 0919472035Az
-      MYSQL_DATABASE: online-shop
-    ports:
-      - "3306:3306"
-    volumes:
-      - db-data:/var/lib/mysql
-volumes:
-  db-data:
+    restart: unless-stopped
+
+secrets:
+  firebase_key:
+    file: ./app/serviceAccountKey.json
