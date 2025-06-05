@@ -62,7 +62,7 @@
                      <!-- Thông báo nổi -->
                     <div class="ms-auto" >
                         <a href="javascript:void(0)" id="openCartBtn" class="bg-warning text-black btn">🛒 Giỏ Hàng
-                            <span class="badge bg-danger">0</span>
+                            <span id="cartCount" class="badge bg-danger">0</span>
                         </a>
                     </div>
                 </div>
@@ -129,7 +129,7 @@
                                 <del>700.000 VNĐ</del>
                                 <b id="price">630.000 VNĐ</b>
                             </div>
-                            <a href="#" class="btn bg-primary text-white" onclick="ShowToast('Tai nghe có dây', 630000)">Mua ngay</a>
+                            <a href="#" class="btn bg-primary text-white buy-now-btn" onclick="ShowToast('Tai nghe có dây', 630000)">Mua ngay</a>
                             <p class="quantity text-primary p-1"></p>
                         </div>
                     </div>
@@ -143,7 +143,7 @@
                                 <del>800.000 VNĐ</del>
                                 <b id="price">760.000 VNĐ</b>
                             </div>
-                            <a href="#" class="btn bg-primary text-white" onclick="ShowToast('Balo Laptop', 760000)">Mua ngay</a>
+                            <a href="#" class="btn bg-primary text-white buy-now-btn" onclick="ShowToast('Balo Laptop', 760000)">Mua ngay</a>
                             <p class="quantity text-primary p-1"></p>
                         </div>
                     </div>
@@ -156,7 +156,7 @@
                             <div class="card-subtitile">
                                 <span id="price">1.000.000 VNĐ</span>
                             </div>
-                            <a href="#" class="btn bg-primary text-white" onclick="ShowToast('Chuột gaming', 1000000)">Mua ngay</a>
+                            <a href="#" class="btn bg-primary text-white buy-now-btn" onclick="ShowToast('Chuột gaming', 1000000)">Mua ngay</a>
                             <p class="quantity text-primary p-1"></p>
                         </div>
                     </div>
@@ -169,7 +169,7 @@
                             <div class="card-subtitile">
                                 <span id="price">1.500.000 VNĐ</span>
                             </div>
-                            <a href="#" class="btn bg-primary text-white" onclick="ShowToast('Tai nghe không dây', 1500000)">Mua ngay</a>
+                            <a href="#" class="btn bg-primary text-white buy-now-btn" onclick="ShowToast('Tai nghe không dây', 1500000)">Mua ngay</a>
                             <p class="quantity text-primary p-1"></p>
                         </div>
                     </div>
@@ -182,7 +182,7 @@
                             <div class="card-subtitile">
                                 <span id="price">2.500.000 VNĐ</span>
                             </div>
-                            <a href="#" class="btn bg-primary text-white" onclick="ShowToast('Đồng hồ thông minh', 2500000)">Mua ngay</a>
+                            <a href="#" class="btn bg-primary text-white buy-now-btn" onclick="ShowToast('Đồng hồ thông minh', 2500000)">Mua ngay</a>
                             <p class="quantity text-primary p-1"></p>
                         </div>
                     </div>
@@ -196,7 +196,7 @@
                                 <del>500.000 VNĐ</del>
                                 <b id="price">450.000 VNĐ</b>
                             </div>
-                            <a href="#" class="btn bg-primary text-white" onclick="ShowToast('Áo thun', 450000)">Mua ngay</a>
+                            <a href="#" class="btn bg-primary text-white buy-now-btn" onclick="ShowToast('Áo thun', 450000)">Mua ngay</a>
                             <p class="quantity text-primary p-1"></p>
                         </div>
                     </div>
@@ -267,5 +267,6 @@
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
         <script src="/static/Auth.js"></script>
+        <script src="/static/Cart.js"></script>
     </body>
 </html>
