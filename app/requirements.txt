@@ -2,3 +2,4 @@ flask
 cryptography
 pycryptodome
 firebase_admin
+python-dotenv

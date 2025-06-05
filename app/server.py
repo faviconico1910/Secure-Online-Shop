@@ -5,13 +5,21 @@ from Crypto.Hash import SHA256
 import base64
 import firebase_admin
 from firebase_admin import credentials, firestore
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = 'your_secret_key'
+
+app.secret_key = os.getenv("SECRET_KEY")
 
 cred = credentials.ApplicationDefault()
 firebase_admin.initialize_app(cred)
 db = firestore.client()
+
+# Secret key for searchable encryption
+token_secret = os.getenv("TOKEN_SECRET")
 
 def encrypt_card(card_number, key):
     cipher = AES.new(key, AES.MODE_GCM)
@@ -21,6 +29,11 @@ def encrypt_card(card_number, key):
         'nonce': base64.b64encode(cipher.nonce).decode(),
         'tag': base64.b64encode(tag).decode()
     }
+
+def generate_search_token(value: str, secret_key: str):
+    h = SHA256.new()
+    h.update((value + secret_key).encode())
+    return h.hexdigest()
 
 def hash_password(password):
     h = SHA256.new()
@@ -45,7 +58,7 @@ def register():
     users_ref = db.collection('Users')
     query = users_ref.where('username', '==', username).stream()
     if any(query):
-        return jsonify({"error": "Username đã tồn tại"}), 400
+        return jsonify({"error": "Username đã tồn tại"}), 400   
 
     # Hash password
     hashed_pw = hash_password(password)
@@ -53,12 +66,16 @@ def register():
     # Mã hóa thẻ tín dụng
     aes_key = get_random_bytes(16)
     encrypted_card = encrypt_card(card, aes_key)
+    search_token = generate_search_token(username, token_secret)
+
 
     # Lưu dữ liệu vào Firestore
     users_ref.document(username).set({
         "username": username,
         "password_hash": hashed_pw,
         "encrypted_card": encrypted_card,
+        "search_token": search_token,
+        "role": "customer" # đây là ABAC
     })
 
     return jsonify({"message": "Đăng ký thành công"})
@@ -71,33 +88,33 @@ def login():
 
     if not username or not password:
         return jsonify({"error": "Thiếu username hoặc password"}), 400
-    
-    # Kiểm tra username tồn tại hay không
-    users_ref = db.collection('Users').document(username)
-    user_doc = users_ref.get()
-    
-    if not user_doc.exists:
+
+    search_token = generate_search_token(username, token_secret)
+    query = db.collection('Users').where('search_token', '==', search_token).stream()
+    user_doc = next(query, None)
+    if not user_doc:
         return jsonify({"error": "Username không tồn tại"}), 400
-    
+
     user_data = user_doc.to_dict()
     hashed_input_pw = hash_password(password)
 
     if hashed_input_pw != user_data.get("password_hash"):
         return jsonify({"error": "Mật khẩu không đúng"}), 401
-    
+
     session['username'] = username
+    session['role'] = user_data.get("role")
 
     return jsonify({"message": "Đăng nhập thành công"})
 
 @app.route('/logout')
 def logout():
     session.pop('username', None)
+    session.pop('role', None)
     return redirect('/')
 
 @app.route('/order', methods=['POST'])
 def order():
     try:
-        # Kiểm tra session để xác thực người dùng
         if 'username' not in session:
             return jsonify({"error": "Vui lòng đăng nhập"}), 401
 
@@ -107,17 +124,17 @@ def order():
         cost = data.get('cost')
         quantity = data.get('quantity')
 
-        # Kiểm tra dữ liệu đầu vào
         if not all([username, productname, cost, quantity]):
             return jsonify({"error": "Thiếu thông tin đơn hàng"}), 400
 
-        # Kiểm tra username có khớp với session không
         if username != session['username']:
             return jsonify({"error": "Thông tin người dùng không hợp lệ"}), 403
 
-        # Lưu đơn hàng vào collection 'Orders'
+        search_token = generate_search_token(username, token_secret)
+
         db.collection('Orders').add({
             "username": username,
+            "searchable_username": search_token,
             "productname": productname,
             "cost": cost,
             "quantity": quantity,
@@ -127,7 +144,7 @@ def order():
         return jsonify({"message": "Đặt hàng thành công!"}), 200
 
     except Exception as e:
-        # Trả về thông báo lỗi chi tiết
         return jsonify({"error": f"Lỗi server: {str(e)}"}), 500
+    
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
