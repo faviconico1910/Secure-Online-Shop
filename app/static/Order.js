@@ -1,7 +1,6 @@
+let cart = []; // Khai báo cart làm biến toàn cục
+
 document.addEventListener('DOMContentLoaded', function () {
-    // Khởi tạo mảng giỏ hàng
-    let cart = [];
-    
     // Lấy phần tử hiển thị số lượng giỏ hàng
     const cartCountElement = document.getElementById('cartCount');
     // Lấy toast element để hiển thị thông báo
@@ -23,25 +22,21 @@ document.addEventListener('DOMContentLoaded', function () {
         // Kiểm tra trạng thái đăng nhập
         const openAuthModalBtn = document.getElementById('openAuthModalBtn');
         if (openAuthModalBtn) {
-            // Người dùng chưa đăng nhập, kích hoạt modal đăng nhập
             openAuthModalBtn.click();
             return;
         }
 
-        // Người dùng đã đăng nhập, tiếp tục thêm sản phẩm vào giỏ hàng
+        // Thêm sản phẩm vào giỏ hàng
         const existingProduct = cart.find(item => item.name === productName);
-        
         if (existingProduct) {
             existingProduct.quantity++;
         } else {
             cart.push({ name: productName, price: price, quantity: 1 });
         }
 
-        // Cập nhật số lượng tổng và giao diện giỏ hàng
+        // Cập nhật số lượng và giao diện
         updateCartCount();
         renderCart();
-
-        // Hiển thị thông báo
         toastLive.show();
     };
 
@@ -98,19 +93,83 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // Thêm sự kiện click cho nút "Giỏ Hàng"
-    // Thêm sự kiện click cho nút "Giỏ Hàng"
     openCartBtn.addEventListener('click', function () {
-        // Kiểm tra trạng thái đăng nhập
         const openAuthModalBtn = document.getElementById('openAuthModalBtn');
         if (openAuthModalBtn) {
-            // Người dùng chưa đăng nhập, kích hoạt modal đăng nhập
             openAuthModalBtn.click();
             return;
         }
 
-        // Người dùng đã đăng nhập, mở modal giỏ hàng
         const modal = new bootstrap.Modal(document.getElementById('Modal'));
         renderCart();
         modal.show();
     });
+
+    // Hàm xác nhận đặt hàng
+    window.checkProduct = async function () {
+        // Kiểm tra trạng thái đăng nhập
+        const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+        if (openAuthModalBtn) {
+            openAuthModalBtn.click();
+            return;
+        }
+
+        // Kiểm tra giỏ hàng có rỗng không
+        if (cart.length === 0) {
+            const emptyCartToast = new bootstrap.Toast(document.getElementById('liveToast-modal-warning'));
+            emptyCartToast.show();
+            return;
+        }
+
+        try {
+            // Lấy username từ session (giả sử server trả về username trong một phần tử HTML hoặc biến toàn cục)
+            const usernameElement = document.querySelector('.username-display'); // Cần có phần tử hiển thị username
+            const username = usernameElement ? usernameElement.textContent.replace('Chào, ', '').replace('!', '').trim() : null;
+
+            if (!username) {
+                throw new Error('Không tìm thấy thông tin người dùng');
+            }
+
+            // Gửi từng sản phẩm trong giỏ hàng đến server
+            for (const item of cart) {
+                const response = await fetch('/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        productname: item.name,
+                        cost: item.price,
+                        quantity: item.quantity
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Đặt hàng thất bại');
+                }
+            }
+
+            /// Hiển thị thông báo thành công
+            const successToastEl = document.getElementById('liveToast-modal-success');
+            if (successToastEl) {
+                const successToast = new bootstrap.Toast(successToastEl);
+                successToast.show();
+            } else {
+                console.error('Không tìm thấy phần tử #liveToast-modal-success');
+                alert('Đặt hàng thành công!');
+            }
+
+            // Xóa giỏ hàng sau khi đặt hàng thành công
+            cart = [];
+            updateCartCount();
+            renderCart();
+
+            // Đóng modal giỏ hàng
+            // const modal = bootstrap.Modal.getInstance(document.getElementById('Modal'));
+            // modal.hide();
+
+        } catch (err) {
+            alert('Lỗi: ' + err.message);
+        }
+    };
 });

@@ -59,8 +59,6 @@ def register():
         "username": username,
         "password_hash": hashed_pw,
         "encrypted_card": encrypted_card,
-        # KHÔNG nên lưu aes_key ở đây trong thực tế
-        "aes_key_base64": base64.b64encode(aes_key).decode()
     })
 
     return jsonify({"message": "Đăng ký thành công"})
@@ -96,5 +94,40 @@ def logout():
     session.pop('username', None)
     return redirect('/')
 
+@app.route('/order', methods=['POST'])
+def order():
+    try:
+        # Kiểm tra session để xác thực người dùng
+        if 'username' not in session:
+            return jsonify({"error": "Vui lòng đăng nhập"}), 401
+
+        data = request.get_json()
+        username = data.get('username')
+        productname = data.get('productname')
+        cost = data.get('cost')
+        quantity = data.get('quantity')
+
+        # Kiểm tra dữ liệu đầu vào
+        if not all([username, productname, cost, quantity]):
+            return jsonify({"error": "Thiếu thông tin đơn hàng"}), 400
+
+        # Kiểm tra username có khớp với session không
+        if username != session['username']:
+            return jsonify({"error": "Thông tin người dùng không hợp lệ"}), 403
+
+        # Lưu đơn hàng vào collection 'Orders'
+        db.collection('Orders').add({
+            "username": username,
+            "productname": productname,
+            "cost": cost,
+            "quantity": quantity,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
+
+        return jsonify({"message": "Đặt hàng thành công!"}), 200
+
+    except Exception as e:
+        # Trả về thông báo lỗi chi tiết
+        return jsonify({"error": f"Lỗi server: {str(e)}"}), 500
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
