@@ -20,7 +20,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Hàm hiển thị toast và thêm sản phẩm vào giỏ hàng
     window.ShowToast = function(productName, price) {
-        // Thêm sản phẩm vào giỏ hàng
+        // Kiểm tra trạng thái đăng nhập
+        const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+        if (openAuthModalBtn) {
+            // Người dùng chưa đăng nhập, kích hoạt modal đăng nhập
+            openAuthModalBtn.click();
+            return;
+        }
+
+        // Người dùng đã đăng nhập, tiếp tục thêm sản phẩm vào giỏ hàng
         const existingProduct = cart.find(item => item.name === productName);
         
         if (existingProduct) {
@@ -85,7 +93,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // Hàm xóa sản phẩm khỏi giỏ hàng
     window.removeItem = function(index) {
         cart.splice(index, 1);
-        cartCount -= 1;
         updateCartCount();
         renderCart();
     };
