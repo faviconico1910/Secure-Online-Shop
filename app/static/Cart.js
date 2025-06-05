@@ -98,7 +98,17 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // Thêm sự kiện click cho nút "Giỏ Hàng"
+    // Thêm sự kiện click cho nút "Giỏ Hàng"
     openCartBtn.addEventListener('click', function () {
+        // Kiểm tra trạng thái đăng nhập
+        const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+        if (openAuthModalBtn) {
+            // Người dùng chưa đăng nhập, kích hoạt modal đăng nhập
+            openAuthModalBtn.click();
+            return;
+        }
+
+        // Người dùng đã đăng nhập, mở modal giỏ hàng
         const modal = new bootstrap.Modal(document.getElementById('Modal'));
         renderCart();
         modal.show();
