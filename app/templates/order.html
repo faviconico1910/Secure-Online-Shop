@@ -1,0 +1,38 @@
+
+{% extends 'base.html' %}
+{% block title %}Đơn hàng của bạn - Shop Capybara{% endblock %}
+{% block content %}
+<!-- Container -->
+<div class="main-content container my-4">
+    <h2>Đơn hàng của bạn</h2>
+    {% if orders %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Sản phẩm</th>
+                    <th>Giá</th>
+                    <th>Số lượng</th>
+                    <th>Ngày tạo</th>
+                    <th>Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order.order_id }}</td>
+                    <td>{{ order.productname }}</td>
+                    <td>{{ order.cost }}</td>
+                    <td>{{ order.quantity }}</td>
+                    <td>{{ order.created_at }}</td>
+                    <td>{{ order.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Bạn chưa có đơn hàng nào.</p>
+    {% endif %}
+</div>
+<!-- Container -->
+{% endblock %}

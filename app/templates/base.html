@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{% block title %}SHOP DEMO{% endblock %}</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            a:hover {filter: brightness(90%);}
+            html, body {
+                height: 100%;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            .main-content {
+                flex: 1;
+            }
+            footer {
+                background-color: #333;
+                color: white;
+                padding: 10px;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Thanh navbar -->
+        <nav class="navbar navbar-expand-lg bg-black">
+              <div class="container">
+                <a href="#" class="nav-link navbar-brand text-white"><h1>Shop Capybara</h1></a>
+                <button class="navbar-toggler bg-white" data-bs-toggle="collapse" data-bs-target="#nav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="nav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link text-white" text-white>Trang Chủ</a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a href="#" class="nav-link dropdown-toggle text-white" data-bs-toggle="dropdown">Tiếng Việt</a>
+                            <ul class="dropdown-menu">
+                                <li class="dropdown-item">
+                                    <a href="#" class="nav-link text-dark">Tiếng Việt</a>
+                                </li>
+                                <li class="dropdown-item">
+                                    <a href="#" class="nav-link text-dark">Tiếng Anh</a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link text-white">Liên Hệ</a>
+                        </li>
+                        
+                        {% if session['username'] %}
+                            <li class="nav-item">
+                                <span class="nav-link text-white username-display">Chào, {{ session['username'] }}!</span>
+                            </li>
+                            <li class="nav-item">
+                                <a class="btn text-primary nav-link" id="logout">Đăng xuất</a>
+                            </li>
+                        {% else %}
+                            <li class="nav-item">
+                                <a class="btn text-primary nav-link" data-bs-toggle="modal" data-bs-target="#authModal" id="openAuthModalBtn">Đăng nhập / Đăng ký</a>
+                            </li>
+                        {% endif %}
+
+                    </ul>
+
+                    <!-- Thông báo nổi -->
+                    <div class="toast" id="liveToast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="3000" data-bs-autohide="true">
+                        <div class="toast-body d-flex bg-success rounded">
+                            <div class="me-auto text-white">Sản phẩm đã được thêm vào giỏ hàng!</div>
+                            <button type="button" class="btn-close" style="filter: invert(1);" data-bs-dismiss="toast" aria-label="Đóng"></button>
+                        </div>
+                    </div>
+                     <!-- Thông báo nổi -->
+                    <div class="ms-auto" >
+                        <a href="javascript:void(0)" id="openCartBtn" class="bg-warning text-black btn">🛒 Giỏ Hàng
+                            <span id="cartCount" class="badge bg-danger">0</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <!-- Thanh navbar -->
+        <!-- Modal -->
+        <div class="modal" id="Modal">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="Modaltilte">Giỏ hàng</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body" id="modalbody">
+
+                    </div>
+                    <div class="modal-footer">
+                        <div id="modaltotal"></div>
+                        <button type="button" class="btn bg-success text-white" onclick="checkProduct()">Xác nhận đặt hàng</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Thông báo nổi -->
+            <div class="toast position-fixed start-50 translate-middle" id="liveToast-modal-success" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="1000" data-bs-autohide="true">
+                <div class="toast-body d-flex bg-success rounded">
+                    <div class="me-auto text-white">Đặt hàng thành công!</div>
+                    <button type="button" class="btn-close" style="filter: invert(1);" data-bs-dismiss="toast" aria-label="Đóng"></button>
+                </div>
+            </div>
+
+            <div class="toast position-fixed start-50 translate-middle" id="liveToast-modal-warning" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="1000" data-bs-autohide="true">
+                <div class="toast-body d-flex bg-warning rounded">
+                    <div class="me-auto text-black">Giỏ hàng trống!</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Đóng"></button>
+                </div>
+            </div>
+        <!-- Thông báo nổi -->
+        </div>
+
+        <!-- Modal -->
+        <!-- Modal auth -->
+        <!-- Modal Đăng nhập / Đăng ký -->
+        <div class="modal fade" id="authModal" tabindex="-1">
+            <!-- modal fade: dùng để tạo hiệu ứng mờ khi hiển thị modal. -->
+            <!-- id="authModal": ID này được JavaScript dùng để điều khiển modal  -->
+            <!-- tabindex="-1": giúp modal có thể được focus -->
+            <div class="modal-dialog">
+                <!-- modal-dialog: phần định dạng kích thước modal. -->
+                <!-- modal-content: bao bọc toàn bộ nội dung modal. -->
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <!-- authModalTitle: sẽ được thay đổi bằng JS khi chuyển giữa “Đăng nhập” và “Đăng ký”. -->
+                        <h5 class="modal-title" id="authModalTitle">Đăng nhập</h5>
+                        <!-- btn-close: nút đóng modal. -->
+                        <!-- data-bs-dismiss="modal": khi click, tự động đóng modal (Bootstrap xử lý). -->
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Form đăng nhập -->
+                        <!-- id="loginForm": dùng để gắn sự kiện xử lý bằng JavaScript. -->
+                        <form id="loginForm">
+                            <!-- Các trường input: người dùng nhập tên và mật khẩu. -->
+                            <input type="text" class="form-control mb-2" placeholder="Tên đăng nhập" required id="loginUsername" name="username">
+                            <input type="password" class="form-control mb-2" placeholder="Mật khẩu" required id="loginPassword" name="password">
+                            <button type="submit" class="btn btn-primary w-100">Đăng nhập</button>
+                        </form>
+                
+                        <!-- Form đăng ký (ẩn lúc đầu) -->
+                        <!-- id="registerForm" và d-none: form này bị ẩn ban đầu. -->
+                        <form id="registerForm" class="d-none">
+                            <input type="text" class="form-control mb-2" placeholder="Tên người dùng" required id="registerUsername" name="username">
+                            <input type="password" class="form-control mb-2" placeholder="Mật khẩu" required id="registerPassword" name="password">
+                            <input type="password" class="form-control mb-2" placeholder="Nhập lại mật khẩu" required id="registerConfirmPassword" name="confirm_password">
+                            <input type="text" class="form-control mb-2" placeholder="Số thẻ tín dụng" required id="registerCard" name="card">
+                            <button type="submit" class="btn btn-success w-100">Đăng ký</button>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <!-- toggleText: dòng nhỏ ở dưới để người dùng chuyển qua lại giữa form đăng nhập và form đăng ký. -->
+                        <!-- toggleAuthForm(): hàm JavaScript giúp chuyển đổi hiển thị 2 form. -->
+                        <small id="toggleText">Chưa có tài khoản? <a href="javascript:void(0)" onclick="toggleAuthForm()">Đăng ký</a></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Modal auth -->
+
+        <!-- Main content -->
+        <div class="main-content container my-4">
+            {% block content %}
+            <!-- Nội dung từng page -->
+            {% endblock %}
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-dark text-white text-center py-3 mt-4">
+            <ul class="d-flex justify-content-center gap-2">
+                <a href="#" class="text-white">Chính sách bảo hành</a>
+                <a href="#" class="text-white">Chính sách đổi trả</a>
+                <a href="#" class="text-white">Chính sách giao hàng</a>
+                <a href="#" class="text-white">Chính sách bảo mật</a>
+            </ul>
+            <div>
+                <p>📍 Địa chỉ: 123 Đường ABC, Quận 1, TP.HCM</p>
+                <p>© 2025 Shop Capybara - All rights reserved</p>
+            </div>
+        </footer>
+
+        <!-- Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="/static/Auth.js"></script> 
+        <script src="/static/Order.js"></script> 
+    </body>
+</html>

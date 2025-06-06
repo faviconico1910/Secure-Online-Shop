@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Tất cả đơn hàng - Quản trị viên{% endblock %}
+
+{% block content %}
+<div class="main-content container my-4">
+    <h2>Tất cả đơn hàng của khách hàng</h2>
+    {% if orders %}
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Khách hàng</th>
+                    <th>Sản phẩm</th>
+                    <th>Giá</th>
+                    <th>Số lượng</th>
+                    <th>Ngày tạo</th>
+                    <th>Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order.order_id }}</td>
+                    <td>{{ order.username }}</td>
+                    <td>{{ order.productname }}</td>
+                    <td>{{ order.cost }}</td>
+                    <td>{{ order.quantity }}</td>
+                    <td>{{ order.created_at }}</td>
+                    <td>{{ order.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Không có đơn hàng nào.</p>
+    {% endif %}
+</div>
+{% endblock %}

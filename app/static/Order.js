@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Gửi từng sản phẩm trong giỏ hàng đến server
             for (const item of cart) {
-                const response = await fetch('/order', {
+                const response = await fetch('/orders', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

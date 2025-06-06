@@ -1,0 +1,138 @@
+2025-06-06 05:45:00,642 - DEBUG - Application started - logging initialized
+2025-06-06 05:45:00,681 - INFO - Starting Flask application
+2025-06-06 05:45:00,719 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.18.0.2:5000
+2025-06-06 05:45:00,720 - INFO - [33mPress CTRL+C to quit[0m
+2025-06-06 05:45:32,074 - DEBUG - Accessing index page, username: None
+2025-06-06 05:45:32,405 - INFO - 172.18.0.1 - - [06/Jun/2025 05:45:32] "GET / HTTP/1.1" 200 -
+2025-06-06 05:45:32,602 - INFO - 172.18.0.1 - - [06/Jun/2025 05:45:32] "[36mGET /static/Order.js HTTP/1.1[0m" 304 -
+2025-06-06 05:45:32,604 - INFO - 172.18.0.1 - - [06/Jun/2025 05:45:32] "[36mGET /static/Auth.js HTTP/1.1[0m" 304 -
+2025-06-06 05:45:32,992 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:45:32,992 - INFO - 172.18.0.1 - - [06/Jun/2025 05:45:32] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:46:23,255 - WARNING - No username in session
+2025-06-06 05:46:23,258 - DEBUG - Fetching order with token: mFLo2o2qeNJ3wA52
+2025-06-06 05:46:23,838 - DEBUG - Starting new HTTPS connection (1): oauth2.googleapis.com:443
+2025-06-06 05:46:24,109 - DEBUG - https://oauth2.googleapis.com:443 "POST /token HTTP/1.1" 200 None
+2025-06-06 05:46:24,410 - DEBUG - Order found: {'cost': 100.0, 'token': 'mFLo2o2qeNJ3wA52', 'productname': 'Test Product', 'status': 'pending', 'created_at': '2025-06-05T20:52:36.423758', 'quantity': 1}
+2025-06-06 05:46:24,423 - WARNING - Access denied: user=None, action=view_order, resource={'username': 'ccc', 'productname': 'Test Product', 'cost': 100.0, 'quantity': 1, 'created_at': '2025-06-05T20:52:36.423758', 'status': 'pending'}
+2025-06-06 05:46:24,423 - INFO - ABAC check failed: user=None, action=view_order, resource={'username': 'ccc', 'productname': 'Test Product', 'cost': 100.0, 'quantity': 1, 'created_at': '2025-06-05T20:52:36.423758', 'status': 'pending'}
+2025-06-06 05:46:24,424 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:24] "[31m[1mGET /orders/mFLo2o2qeNJ3wA52 HTTP/1.1[0m" 403 -
+2025-06-06 05:46:24,718 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:46:24,719 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:24] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:46:31,991 - DEBUG - Processing login request
+2025-06-06 05:46:32,127 - INFO - User ccc logged in successfully
+2025-06-06 05:46:32,134 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:32] "POST /login HTTP/1.1" 200 -
+2025-06-06 05:46:33,291 - DEBUG - Accessing index page, username: ccc
+2025-06-06 05:46:33,301 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:33] "GET / HTTP/1.1" 200 -
+2025-06-06 05:46:33,386 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:33] "[36mGET /static/Auth.js HTTP/1.1[0m" 304 -
+2025-06-06 05:46:33,387 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:33] "[36mGET /static/Order.js HTTP/1.1[0m" 304 -
+2025-06-06 05:46:33,627 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:46:33,629 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:33] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:46:39,380 - DEBUG - User data retrieved: {'search_token': '2f71b583fb2126332fb5d8f29c6bb49c0ef7f1c4b001fddc256fb5a3b58d93d9', 'encrypted_card': {'tag': 'qWBE8YW9HC34Es+N7nXBFw==', 'nonce': '/RWp33NI0HWXUbUn4vtJkA==', 'ciphertext': 'IXnO'}, 'password_hash': 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'username': 'ccc', 'role': 'customer'}
+2025-06-06 05:46:39,381 - DEBUG - Fetching order with token: mFLo2o2qeNJ3wA52
+2025-06-06 05:46:39,567 - DEBUG - Order found: {'cost': 100.0, 'token': 'mFLo2o2qeNJ3wA52', 'productname': 'Test Product', 'status': 'pending', 'created_at': '2025-06-05T20:52:36.423758', 'quantity': 1}
+2025-06-06 05:46:39,568 - DEBUG - Access granted to customer: {'username': 'ccc', 'role': 'customer'}
+2025-06-06 05:46:39,569 - DEBUG - Received request for token: mFLo2o2qeNJ3wA52
+2025-06-06 05:46:39,570 - INFO - Order retrieved successfully for token: mFLo2o2qeNJ3wA52
+2025-06-06 05:46:39,571 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:39] "GET /orders/mFLo2o2qeNJ3wA52 HTTP/1.1" 200 -
+2025-06-06 05:46:39,794 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:46:39,795 - INFO - 172.18.0.1 - - [06/Jun/2025 05:46:39] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:47:44,648 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:47:44,651 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:44] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:47:47,227 - DEBUG - Processing logout request
+2025-06-06 05:47:47,227 - INFO - User logged out
+2025-06-06 05:47:47,228 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:47] "[32mGET /logout HTTP/1.1[0m" 302 -
+2025-06-06 05:47:47,239 - DEBUG - Accessing index page, username: None
+2025-06-06 05:47:47,241 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:47] "GET / HTTP/1.1" 200 -
+2025-06-06 05:47:47,282 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:47] "[36mGET /static/Auth.js HTTP/1.1[0m" 304 -
+2025-06-06 05:47:47,283 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:47] "[36mGET /static/Order.js HTTP/1.1[0m" 304 -
+2025-06-06 05:47:47,500 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:47:47,501 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:47] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:47:52,555 - DEBUG - Processing login request
+2025-06-06 05:47:52,995 - INFO - User ddd logged in successfully
+2025-06-06 05:47:52,998 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:52] "POST /login HTTP/1.1" 200 -
+2025-06-06 05:47:54,197 - DEBUG - Accessing index page, username: ddd
+2025-06-06 05:47:54,200 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:54] "GET / HTTP/1.1" 200 -
+2025-06-06 05:47:54,283 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:54] "[36mGET /static/Auth.js HTTP/1.1[0m" 304 -
+2025-06-06 05:47:54,285 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:54] "[36mGET /static/Order.js HTTP/1.1[0m" 304 -
+2025-06-06 05:47:54,445 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:47:54,446 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:54] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:47:56,291 - DEBUG - User data retrieved: {'search_token': '1f19d616893b62b1a7cd17c88472c650cbf8d793ea883767d6ec80c8e1c42dc2', 'encrypted_card': {'tag': 'A6z1+FPJAJHXtb6oClgRGQ==', 'nonce': '/rUtoo5JdiybntZa4uYuHw==', 'ciphertext': '5bPe'}, 'password_hash': 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'username': 'ddd', 'role': 'customer'}
+2025-06-06 05:47:56,293 - DEBUG - Fetching order with token: mFLo2o2qeNJ3wA52
+2025-06-06 05:47:56,440 - DEBUG - Order found: {'cost': 100.0, 'token': 'mFLo2o2qeNJ3wA52', 'productname': 'Test Product', 'status': 'pending', 'created_at': '2025-06-05T20:52:36.423758', 'quantity': 1}
+2025-06-06 05:47:56,440 - WARNING - Access denied: customer ddd tried to access ccc's order
+2025-06-06 05:47:56,441 - INFO - ABAC check failed: user={'username': 'ddd', 'role': 'customer'}, action=view_order, resource={'username': 'ccc', 'productname': 'Test Product', 'cost': 100.0, 'quantity': 1, 'created_at': '2025-06-05T20:52:36.423758', 'status': 'pending'}
+2025-06-06 05:47:56,442 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:56] "[31m[1mGET /orders/mFLo2o2qeNJ3wA52 HTTP/1.1[0m" 403 -
+2025-06-06 05:47:56,711 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:47:56,713 - INFO - 172.18.0.1 - - [06/Jun/2025 05:47:56] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:48:02,535 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:48:02,537 - INFO - 172.18.0.1 - - [06/Jun/2025 05:48:02] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:48:06,382 - DEBUG - Processing order request
+2025-06-06 05:48:06,535 - INFO - Order placed successfully: order_20250606_054806_035, token: ytsBI+5UC2yRq1QG
+2025-06-06 05:48:06,536 - INFO - 172.18.0.1 - - [06/Jun/2025 05:48:06] "POST /order HTTP/1.1" 200 -
+2025-06-06 05:48:39,986 - DEBUG - User data retrieved: {'search_token': '1f19d616893b62b1a7cd17c88472c650cbf8d793ea883767d6ec80c8e1c42dc2', 'encrypted_card': {'tag': 'A6z1+FPJAJHXtb6oClgRGQ==', 'nonce': '/rUtoo5JdiybntZa4uYuHw==', 'ciphertext': '5bPe'}, 'password_hash': 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'username': 'ddd', 'role': 'customer'}
+2025-06-06 05:48:39,988 - DEBUG - Fetching order with token: ytsBI+5UC2yRq1QG
+2025-06-06 05:48:40,185 - DEBUG - Order found: {'token': 'ytsBI+5UC2yRq1QG', 'created_at': '2025-06-06T05:48:06.383396', 'productname': 'Balo Laptop', 'status': 'pending', 'cost': 760000.0, 'quantity': 1}
+2025-06-06 05:48:40,186 - DEBUG - Access granted to customer: {'username': 'ddd', 'role': 'customer'}
+2025-06-06 05:48:40,188 - DEBUG - Received request for token: ytsBI+5UC2yRq1QG
+2025-06-06 05:48:40,188 - INFO - Order retrieved successfully for token: ytsBI+5UC2yRq1QG
+2025-06-06 05:48:40,190 - INFO - 172.18.0.1 - - [06/Jun/2025 05:48:40] "GET /orders/ytsBI+5UC2yRq1QG HTTP/1.1" 200 -
+2025-06-06 05:48:40,295 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:48:40,296 - INFO - 172.18.0.1 - - [06/Jun/2025 05:48:40] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:49:05,802 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:49:05,807 - INFO - 172.18.0.1 - - [06/Jun/2025 05:49:05] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:49:08,894 - DEBUG - Processing order request
+2025-06-06 05:49:09,022 - INFO - Order placed successfully: order_20250606_054908_035, token: iWeEG51qH4g98IPR
+2025-06-06 05:49:09,024 - INFO - 172.18.0.1 - - [06/Jun/2025 05:49:09] "POST /order HTTP/1.1" 200 -
+2025-06-06 05:54:19,704 - DEBUG - Accessing index page, username: ddd
+2025-06-06 05:54:19,706 - INFO - 172.18.0.1 - - [06/Jun/2025 05:54:19] "GET / HTTP/1.1" 200 -
+2025-06-06 05:54:19,770 - INFO - 172.18.0.1 - - [06/Jun/2025 05:54:19] "[36mGET /static/Auth.js HTTP/1.1[0m" 304 -
+2025-06-06 05:54:19,774 - INFO - 172.18.0.1 - - [06/Jun/2025 05:54:19] "[36mGET /static/Order.js HTTP/1.1[0m" 304 -
+2025-06-06 05:54:20,121 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:54:20,123 - INFO - 172.18.0.1 - - [06/Jun/2025 05:54:20] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:54:25,955 - DEBUG - User data retrieved: {'search_token': '1f19d616893b62b1a7cd17c88472c650cbf8d793ea883767d6ec80c8e1c42dc2', 'encrypted_card': {'tag': 'A6z1+FPJAJHXtb6oClgRGQ==', 'nonce': '/rUtoo5JdiybntZa4uYuHw==', 'ciphertext': '5bPe'}, 'password_hash': 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'username': 'ddd', 'role': 'customer'}
+2025-06-06 05:54:25,956 - DEBUG - Fetching order with token: avc
+2025-06-06 05:54:26,080 - WARNING - No order found for token: avc
+2025-06-06 05:54:26,080 - WARNING - Access denied: user={'username': 'ddd', 'role': 'customer'}, action=view_order, resource=None
+2025-06-06 05:54:26,082 - INFO - ABAC check failed: user={'username': 'ddd', 'role': 'customer'}, action=view_order, resource=None
+2025-06-06 05:54:26,083 - INFO - 172.18.0.1 - - [06/Jun/2025 05:54:26] "[31m[1mGET /orders/avc HTTP/1.1[0m" 403 -
+2025-06-06 05:54:26,301 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:54:26,302 - INFO - 172.18.0.1 - - [06/Jun/2025 05:54:26] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:57:31,315 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:31,317 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:31] "[35m[1mGET /orders HTTP/1.1[0m" 500 -
+2025-06-06 05:57:31,588 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:31,590 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:31] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:57:46,612 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:46,615 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:46] "[35m[1mGET /orders HTTP/1.1[0m" 500 -
+2025-06-06 05:57:46,699 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:46,700 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:46] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:57:47,751 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:47,752 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:47] "[35m[1mGET /orders HTTP/1.1[0m" 500 -
+2025-06-06 05:57:47,981 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:47,983 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:47] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:57:52,619 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:52,620 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:52] "[35m[1mGET /orders HTTP/1.1[0m" 500 -
+2025-06-06 05:57:52,713 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:57:52,715 - INFO - 172.18.0.1 - - [06/Jun/2025 05:57:52] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:58:01,888 - DEBUG - User data retrieved: {'search_token': '1f19d616893b62b1a7cd17c88472c650cbf8d793ea883767d6ec80c8e1c42dc2', 'encrypted_card': {'tag': 'A6z1+FPJAJHXtb6oClgRGQ==', 'nonce': '/rUtoo5JdiybntZa4uYuHw==', 'ciphertext': '5bPe'}, 'password_hash': 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'username': 'ddd', 'role': 'customer'}
+2025-06-06 05:58:01,889 - DEBUG - Fetching order with token: 1aUVjg5nAXBTGABESHSo
+2025-06-06 05:58:02,025 - WARNING - No order found for token: 1aUVjg5nAXBTGABESHSo
+2025-06-06 05:58:02,026 - WARNING - Access denied: user={'username': 'ddd', 'role': 'customer'}, action=view_order, resource=None
+2025-06-06 05:58:02,027 - INFO - ABAC check failed: user={'username': 'ddd', 'role': 'customer'}, action=view_order, resource=None
+2025-06-06 05:58:02,028 - INFO - 172.18.0.1 - - [06/Jun/2025 05:58:02] "[31m[1mGET /orders/1aUVjg5nAXBTGABESHSo HTTP/1.1[0m" 403 -
+2025-06-06 05:58:02,259 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:58:02,261 - INFO - 172.18.0.1 - - [06/Jun/2025 05:58:02] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:58:04,650 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:58:04,652 - INFO - 172.18.0.1 - - [06/Jun/2025 05:58:04] "[35m[1mGET /orders/ HTTP/1.1[0m" 500 -
+2025-06-06 05:58:04,751 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:58:04,752 - INFO - 172.18.0.1 - - [06/Jun/2025 05:58:04] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
+2025-06-06 05:59:02,790 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 05:59:02,792 - INFO - 172.18.0.1 - - [06/Jun/2025 05:59:02] "[35m[1mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 500 -
+2025-06-06 06:00:07,852 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 06:00:07,856 - INFO - 172.18.0.1 - - [06/Jun/2025 06:00:07] "[35m[1mGET /orders HTTP/1.1[0m" 500 -
+2025-06-06 06:00:07,915 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 06:00:07,916 - INFO - 172.18.0.1 - - [06/Jun/2025 06:00:07] "[35m[1mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 500 -
+2025-06-06 06:00:08,340 - ERROR - Unhandled exception: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2025-06-06 06:00:08,342 - INFO - 172.18.0.1 - - [06/Jun/2025 06:00:08] "[35m[1mGET /favicon.ico HTTP/1.1[0m" 500 -
