@@ -1,4 +1,3 @@
-
 {% extends 'base.html' %}
 {% block title %}Đơn hàng của bạn - Shop Capybara{% endblock %}
 {% block content %}
@@ -15,6 +14,7 @@
                     <th>Số lượng</th>
                     <th>Ngày tạo</th>
                     <th>Trạng thái</th>
+                    <th>Hành động</th>
                 </tr>
             </thead>
             <tbody>
@@ -25,7 +25,22 @@
                     <td>{{ order.cost }}</td>
                     <td>{{ order.quantity }}</td>
                     <td>{{ order.created_at }}</td>
-                    <td>{{ order.status }}</td>
+                    <td>
+                        <span class="badge bg-{% if order.status == 'resolved' %}success{% else %}warning{% endif %}">
+                            {{ order.status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if order.status != 'resolved' %}
+                            <button class="btn btn-success btn-sm" onclick="openPaymentForm('{{ order.order_id }}', '{{ order.productname }}', '{{ order.cost }}', '{{ order.quantity }}')">
+                                <i class="bi bi-credit-card"></i> Thanh toán
+                            </button>
+                        {% else %}
+                            <button class="btn btn-secondary btn-sm" disabled>
+                                <i class="bi bi-check-circle"></i> Đã thanh toán
+                            </button>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -33,6 +48,86 @@
     {% else %}
         <p>Bạn chưa có đơn hàng nào.</p>
     {% endif %}
+
+    <!-- Payment Modal -->
+    <div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="paymentModalLabel">Thanh toán đơn hàng</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="paymentForm">
+                        <div class="mb-3">
+                            <label class="form-label">Đơn hàng:</label>
+                            <p id="orderInfo" class="fw-bold"></p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="cardNumber" class="form-label">Số thẻ *</label>
+                            <input type="text" class="form-control" id="cardNumber" placeholder="1234 5678 9012 3456" maxlength="19" required>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="expiryDate" class="form-label">Ngày hết hạn *</label>
+                                <input type="text" class="form-control" id="expiryDate" placeholder="MM/YY" maxlength="5" required>
+                            </div>
+                            <div class="col-6">
+                                <label for="cvv" class="form-label">CVV *</label>
+                                <input type="text" class="form-control" id="cvv" placeholder="123" maxlength="3" required>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3 mt-3">
+                            <label for="cardHolder" class="form-label">Tên chủ thẻ *</label>
+                            <input type="text" class="form-control" id="cardHolder" placeholder="NGUYEN VAN A" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-success" id="confirmPaymentBtn" onclick="processPayment()">
+                        <span id="paymentBtnText">
+                            <i class="bi bi-credit-card"></i> Xác nhận thanh toán
+                        </span>
+                        <span id="paymentLoading" class="d-none">
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Đang xử lý...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <!-- Payment Success Toast -->
+        <div id="liveToast-payment-success" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-success text-white">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong class="me-auto">Thành công</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                Thanh toán thành công! Đơn hàng đã được xử lý.
+            </div>
+        </div>
+
+        <!-- Payment Failed Toast -->
+        <div id="liveToast-payment-failed" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-danger text-white">
+                <i class="bi bi-x-circle me-2"></i>
+                <strong class="me-auto">Thất bại</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                Thanh toán thất bại! Vui lòng kiểm tra thông tin và thử lại.
+            </div>
+        </div>
+    </div>
 </div>
 <!-- Container -->
 {% endblock %}

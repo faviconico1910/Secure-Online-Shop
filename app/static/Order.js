@@ -172,4 +172,169 @@ document.addEventListener('DOMContentLoaded', function () {
             alert('Lỗi: ' + err.message);
         }
     };
+    // Hàm gửi yêu cầu thanh toán
+    window.processPayment = async function(orderId) {
+        const usernameElement = document.querySelector('.username-display');
+        const username = usernameElement ? usernameElement.textContent.replace('Chào, ', '').replace('!', '').trim() : null;
+
+        if (!username) {
+            alert('Vui lòng đăng nhập để thanh toán');
+            return;
+        }
+
+        try {
+            // Gửi yêu cầu đến server để ký số ML-DSA
+            const response = await fetch('/payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    order_id: orderId
+                })
+            });
+
+            const data = await response.json();
+            if (response.ok) {
+                const successToast = new bootstrap.Toast(document.getElementById('liveToast-payment-success'));
+                successToast.show();
+            } else {
+                throw new Error(data.error || 'Thanh toán thất bại');
+            }
+        } catch (err) {
+            alert('Lỗi thanh toán: ' + err.message);
+        }
+    };
+    // Hàm mở form thanh toán
+    window.openPaymentForm = function(orderId, productName, cost, quantity) {
+        currentOrderId = orderId;
+        const orderInfoElement = document.getElementById('orderInfo');
+        if (orderInfoElement) {
+            const total = cost * quantity;
+            orderInfoElement.textContent = `${productName} - ${cost.toLocaleString()} x ${quantity} = ${total.toLocaleString()} VNĐ (Order #${orderId})`;
+        }
+        
+        // Reset form
+        const paymentForm = document.getElementById('paymentForm');
+        if (paymentForm) {
+            paymentForm.reset();
+        }
+        
+        // Show modal
+        const paymentModal = document.getElementById('paymentModal');
+        if (paymentModal) {
+            const modal = new bootstrap.Modal(paymentModal);
+            modal.show();
+        }
+    };
+
+    // Hàm xử lý thanh toán với ML-DSA
+    window.processPayment = async function() {
+        if (!currentOrderId) return;
+
+        // Validate form
+        const form = document.getElementById('paymentForm');
+        if (!form || !form.checkValidity()) {
+            if (form) form.reportValidity();
+            return;
+        }
+
+        const confirmBtn = document.getElementById('confirmPaymentBtn');
+        const btnText = document.getElementById('paymentBtnText');
+        const loading = document.getElementById('paymentLoading');
+
+        // Show loading state
+        if (confirmBtn) confirmBtn.disabled = true;
+        if (btnText) btnText.classList.add('d-none');
+        if (loading) loading.classList.remove('d-none');
+
+        try {
+            const usernameElement = document.querySelector('.username-display');
+            const username = usernameElement ? usernameElement.textContent.replace('Chào, ', '').replace('!', '').trim() : null;
+
+            if (!username) {
+                throw new Error('Vui lòng đăng nhập để thanh toán');
+            }
+
+            // Get form data
+            const paymentData = {
+                username: username,
+                order_id: currentOrderId,
+                card_number: document.getElementById('cardNumber')?.value.replace(/\s/g, '') || '',
+                expiry_date: document.getElementById('expiryDate')?.value || '',
+                cvv: document.getElementById('cvv')?.value || '',
+                card_holder: document.getElementById('cardHolder')?.value || ''
+            };
+
+            // Send payment request with ML-DSA signature
+            const response = await fetch('/payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(paymentData)
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                // Success - show success toast
+                const successToast = document.getElementById('liveToast-payment-success');
+                if (successToast) {
+                    const toast = new bootstrap.Toast(successToast);
+                    toast.show();
+                }
+                
+                // Close modal
+                const paymentModal = document.getElementById('paymentModal');
+                if (paymentModal) {
+                    const modal = bootstrap.Modal.getInstance(paymentModal);
+                    if (modal) modal.hide();
+                }
+                
+                // Update UI - change button to disabled state
+                updateOrderStatus(currentOrderId, 'resolved');
+                
+            } else {
+                throw new Error(data.error || 'Thanh toán thất bại');
+            }
+            
+        } catch (err) {
+            // Show error toast
+            const errorToast = document.getElementById('liveToast-payment-failed');
+            if (errorToast) {
+                const toast = new bootstrap.Toast(errorToast);
+                toast.show();
+            }
+            console.error('Payment error:', err.message);
+        } finally {
+            // Reset button state
+            if (confirmBtn) confirmBtn.disabled = false;
+            if (btnText) btnText.classList.remove('d-none');
+            if (loading) loading.classList.add('d-none');
+        }
+    };
+
+    // Hàm cập nhật trạng thái đơn hàng trên UI
+    function updateOrderStatus(orderId, newStatus) {
+        // Find the order row and update it
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const orderIdCell = row.cells[0];
+            if (orderIdCell && orderIdCell.textContent === orderId) {
+                // Update status badge
+                const statusCell = row.cells[5];
+                if (statusCell) {
+                    statusCell.innerHTML = '<span class="badge bg-success">resolved</span>';
+                }
+                
+                // Update action button
+                const actionCell = row.cells[6];
+                if (actionCell) {
+                    actionCell.innerHTML = `
+                        <button class="btn btn-secondary btn-sm" disabled>
+                            <i class="bi bi-check-circle"></i> Đã thanh toán
+                        </button>
+                    `;
+                }
+            }
+        });
+    }
 });
