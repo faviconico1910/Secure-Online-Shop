@@ -1,13 +1,16 @@
-from flask import Flask, request, jsonify, render_template, session, redirect
+from flask import Flask, request, jsonify, render_template, session, redirect, flash
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from Crypto.Hash import SHA256
 import base64
 from dotenv import load_dotenv
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
+import logging
+logging.basicConfig(level=logging.DEBUG)
+from vnpay import create_vnpay_instance
 try:
     import oqs
     OQS_AVAILABLE = True
@@ -30,6 +33,20 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 
 app.secret_key = os.getenv("SECRET_KEY", "default-secret-key-change-this")
 token_secret = os.getenv("TOKEN_SECRET", "default-token-secret-change-this")
+
+# Lấy giá trị từ biến môi trường
+VNPAY_TMN_CODE = os.getenv('VNPAY_TMN_CODE')
+VNPAY_HASH_SECRET = os.getenv('VNPAY_HASH_SECRET')
+VNPAY_URL = os.getenv('VNPAY_URL')
+VNPAY_RETURN_URL = os.getenv('VNPAY_RETURN_URL')
+
+# Khởi tạo vnpay instance
+vnpay = create_vnpay_instance(
+    tmn_code=VNPAY_TMN_CODE,
+    hash_secret=VNPAY_HASH_SECRET,
+    vnpay_url=VNPAY_URL,
+    return_url=VNPAY_RETURN_URL
+)
 
 def encrypt_card(card_number, key):
     """Encrypt card number using AES-GCM"""
@@ -300,84 +317,202 @@ def admin_view_orders():
         print(f"Admin orders error: {e}")
         return render_template('admin_orders.html', orders=[], username=session.get('username', ''), error="Internal server error")
 
-@app.route('/payment', methods=['POST'])
-def payment():
-    try:
-        if 'username' not in session:
-            return jsonify({"error": "Vui lòng đăng nhập"}), 401
+# @app.route('/payment', methods=['POST'])
+# def payment():
+#     try:
+#         if 'username' not in session:
+#             return jsonify({"error": "Vui lòng đăng nhập"}), 401
 
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Invalid JSON data"}), 400
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"error": "Invalid JSON data"}), 400
 
-        username = data.get('username')
-        order_id = data.get('order_id')
+#         username = data.get('username')
+#         order_id = data.get('order_id')
 
-        if not username or not order_id:
-            return jsonify({"error": "Thiếu thông tin thanh toán"}), 400
+#         if not username or not order_id:
+#             return jsonify({"error": "Thiếu thông tin thanh toán"}), 400
 
-        if username != session['username']:
-            return jsonify({"error": "Thông tin người dùng không hợp lệ"}), 403
+#         if username != session['username']:
+#             return jsonify({"error": "Thông tin người dùng không hợp lệ"}), 403
 
-        if not db:
-            return jsonify({"error": "Database connection failed"}), 500
+#         if not db:
+#             return jsonify({"error": "Database connection failed"}), 500
 
-        # Get order information
-        orders_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
-        order_doc = orders_ref.get()
-        if not order_doc.exists:
-            return jsonify({"error": "Đơn hàng không tồn tại"}), 404
+#         # Get order information
+#         orders_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
+#         order_doc = orders_ref.get()
+#         if not order_doc.exists:
+#             return jsonify({"error": "Đơn hàng không tồn tại"}), 404
 
-        order_data = order_doc.to_dict()
+#         order_data = order_doc.to_dict()
         
-        # If ML-DSA is available, use digital signature
-        if OQS_AVAILABLE:
-            message = f"{username}{order_id}{order_data['cost']}{order_data['quantity']}".encode()
+#         # If ML-DSA is available, use digital signature
+#         if OQS_AVAILABLE:
+#             message = f"{username}{order_id}{order_data['cost']}{order_data['quantity']}".encode()
 
-            # Get user's ML-DSA keys
-            user_doc = db.collection('Users').document(username).get()
-            if not user_doc.exists:
-                return jsonify({"error": "Người dùng không tồn tại"}), 404
+#             # Get user's ML-DSA keys
+#             user_doc = db.collection('Users').document(username).get()
+#             if not user_doc.exists:
+#                 return jsonify({"error": "Người dùng không tồn tại"}), 404
 
-            user_data = user_doc.to_dict()
+#             user_data = user_doc.to_dict()
             
-            if 'mldsa_public_key' in user_data and 'mldsa_private_key' in user_data:
-                public_key = base64.b64decode(user_data['mldsa_public_key'])
-                private_key = base64.b64decode(user_data['mldsa_private_key'])
+#             if 'mldsa_public_key' in user_data and 'mldsa_private_key' in user_data:
+#                 public_key = base64.b64decode(user_data['mldsa_public_key'])
+#                 private_key = base64.b64decode(user_data['mldsa_private_key'])
 
-                # Sign with ML-DSA
-                sig = oqs.Signature('Dilithium2')
-                signature = sig.sign(message, private_key)
+#                 # Sign with ML-DSA
+#                 sig = oqs.Signature('Dilithium2')
+#                 signature = sig.sign(message, private_key)
 
-                # Verify signature
-                is_valid = sig.verify(message, signature, public_key)
-                if not is_valid:
-                    return jsonify({"error": "Chữ ký không hợp lệ"}), 403
+#                 # Verify signature
+#                 is_valid = sig.verify(message, signature, public_key)
+#                 if not is_valid:
+#                     return jsonify({"error": "Chữ ký không hợp lệ"}), 403
 
-                # Update order status with signature
-                orders_ref.update({
-                    "status": "paid",
-                    "payment_signature": base64.b64encode(signature).decode(),
-                    "payment_time": datetime.utcnow().isoformat()
-                })
-            else:
-                # Fallback: update without signature
-                orders_ref.update({
-                    "status": "paid",
-                    "payment_time": datetime.utcnow().isoformat()
-                })
-        else:
-            # No ML-DSA available, simple status update
-            orders_ref.update({
-                "status": "paid",
-                "payment_time": datetime.utcnow().isoformat()
-            })
+#                 # Update order status with signature
+#                 orders_ref.update({
+#                     "status": "paid",
+#                     "payment_signature": base64.b64encode(signature).decode(),
+#                     "payment_time": datetime.utcnow().isoformat()
+#                 })
+#             else:
+#                 # Fallback: update without signature
+#                 orders_ref.update({
+#                     "status": "paid",
+#                     "payment_time": datetime.utcnow().isoformat()
+#                 })
+#         else:
+#             # No ML-DSA available, simple status update
+#             orders_ref.update({
+#                 "status": "paid",
+#                 "payment_time": datetime.utcnow().isoformat()
+#             })
 
-        return jsonify({"message": "Thanh toán thành công!"})
+#         return jsonify({"message": "Thanh toán thành công!"})
 
+#     except Exception as e:
+#         print(f"Payment error: {e}")
+#         return jsonify({"error": "Internal server error"}), 500
+
+# Route tạo payment URL - đã đơn giản hóa
+@app.route('/create_payment_url')
+def create_payment_url():
+    """Tạo URL thanh toán VNPay"""
+    if 'username' not in session:
+        flash('Vui lòng đăng nhập', 'error')
+        return redirect('/')
+    
+    username = session['username']
+    order_id = request.args.get('order_id')
+    
+    if not order_id:
+        flash('Không tìm thấy mã đơn hàng', 'error')
+        return redirect('/orders')
+
+    try:
+        # Lấy đơn hàng từ Firestore
+        order_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
+        order_doc = order_ref.get()
+        
+        if not order_doc.exists:
+            flash('Không tìm thấy đơn hàng', 'error')
+            return redirect('/orders')
+
+        order = order_doc.to_dict()
+
+        # Kiểm tra trạng thái đơn hàng
+        if order.get('status') == 'resolved':
+            flash('Đơn hàng đã được thanh toán', 'info')
+            return redirect('/orders')
+        
+        # Tạo URL thanh toán
+        order_info = f"Thanh toan don hang {order_id}"
+        amount = float(order.get('cost', 0))
+        ip_addr = request.remote_addr or '127.0.0.1'
+        
+        payment_url, txn_ref = vnpay.create_payment_url(
+            order_info=order_info,
+            amount=amount,
+            order_id=order_id,
+            ip_addr=ip_addr
+        )
+
+        # Lưu thông tin payment vào session
+        session[f'payment_{txn_ref}'] = {
+            'order_id': order_id,
+            'username': username,
+            'amount': amount
+        }
+        
+        app.logger.debug(f"Payment URL created: {payment_url}")
+        return redirect(payment_url)
+        
     except Exception as e:
-        print(f"Payment error: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        app.logger.error(f"Error creating payment URL: {e}")
+        flash('Có lỗi xảy ra khi tạo URL thanh toán', 'error')
+        return redirect('/orders')
 
+
+@app.route('/payment_return')
+def payment_return():
+    """Xử lý kết quả trả về từ VNPay"""
+    try:
+        # Lấy tất cả parameters từ request
+        request_params = dict(request.args)
+        
+        # Xác thực chữ ký
+        is_valid, response_code, txn_ref = vnpay.verify_return_url(request_params)
+        
+        if not is_valid:
+            flash('Chữ ký không hợp lệ', 'error')
+            return redirect('/orders?payment_status=failed')
+        
+        # Lấy thông tin giao dịch từ session
+        payment_info = session.get(f'payment_{txn_ref}')
+        if not payment_info:
+            flash('Không tìm thấy thông tin giao dịch', 'error')
+            return redirect('/orders?payment_status=failed')
+        
+        order_id = payment_info['order_id']
+        username = payment_info['username']
+        
+        if response_code == '00':
+            # Thanh toán thành công
+            try:
+                order_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
+                order_ref.update({
+                    'status': 'resolved',
+                    'payment_method': 'vnpay',
+                    'transaction_ref': txn_ref,
+                    'paid_at': datetime.now(timezone(timedelta(hours=7)))
+                })
+                
+                # Xóa thông tin giao dịch khỏi session
+                session.pop(f'payment_{txn_ref}', None)
+                
+                flash('Thanh toán thành công!', 'success')
+                return redirect('/orders?payment_status=success')
+                
+            except Exception as e:
+                app.logger.error(f"Error updating order status: {e}")
+                flash('Có lỗi cập nhật đơn hàng', 'warning')
+                return redirect('/orders?payment_status=success')
+        else:
+            # Thanh toán thất bại
+            error_msg = vnpay.get_error_message(response_code)
+            flash(f'Thanh toán thất bại: {error_msg}', 'error')
+            
+            # Xóa thông tin giao dịch
+            session.pop(f'payment_{txn_ref}', None)
+            
+            return redirect('/orders?payment_status=failed')
+            
+    except Exception as e:
+        app.logger.error(f"Error processing payment return: {e}")
+        flash('Có lỗi xảy ra khi xử lý kết quả thanh toán', 'error')
+        return redirect('/orders?payment_status=failed')
+    
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
