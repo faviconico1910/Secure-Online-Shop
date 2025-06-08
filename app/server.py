@@ -81,15 +81,20 @@ def decrypt_card(encrypted_data, key):
         print(f"Decryption error: {e}")
         return None
 
-def generate_search_token(value: str, secret_key: str):
+def generate_search_token(value: str):
+    salt = get_random_bytes(16)
     h = SHA256.new()
-    h.update((value + secret_key).encode())
-    return h.hexdigest()
+    h.update(salt + value.encode())
+    return base64.b64encode(salt).decode(), h.hexdigest()
 
 def hash_password(password):
+    salt = get_random_bytes(16) # 16 bytes ngẫu nhiên
     h = SHA256.new()
-    h.update(password.encode())
-    return h.hexdigest()
+    h.update(salt + password.encode())
+    return {
+        'salt': base64.b64encode(salt).decode(),
+        'hash': h.hexdigest()
+    }
 
 def generate_order_token(username, order_id):
     h = SHA256.new()
@@ -155,31 +160,41 @@ def register():
         card = data.get('card')
         if not username or not password or not card:
             return jsonify({"error": "Thiếu thông tin đăng ký"}), 400
-        # Check if Firebase is available
         if not db:
             return jsonify({"error": "Database connection failed"}), 500
-        # Check if username exists
         users_ref = db.collection('Users')
         query = users_ref.where('username', '==', username).limit(1).stream()
         if any(query):
             return jsonify({"error": "Username đã tồn tại"}), 400
-        # Hash password and encrypt card
-        hashed_pw = hash_password(password)
+        
+        # Băm mật khẩu với salt
+        password_data = hash_password(password)
+        hashed_pw = password_data['hash']
+        password_salt = password_data['salt']
+        
+        # Tạo search token với salt
+        search_token_salt, search_token = generate_search_token(username)
+        
+        # Mã hóa thẻ
         aes_key = get_random_bytes(16)
         encrypted_card = encrypt_card(card, aes_key)
         if not encrypted_card:
             return jsonify({"error": "Encryption failed"}), 500
-        search_token = generate_search_token(username, token_secret)
-        # Generate ML-DSA keys (required)
+        
+        # Tạo khóa ML-DSA
         public_key, private_key = generate_mldsa_keys()
         if not public_key or not private_key:
             return jsonify({"error": "Không tạo được khóa lượng tử"}), 500
+        
+        # Lưu dữ liệu người dùng vào Firestore
         user_data = {
             "username": username,
             "password_hash": hashed_pw,
+            "password_salt": password_salt,  # Lưu salt của mật khẩu
+            "search_token": search_token,
+            "search_token_salt": search_token_salt,  # Lưu salt của search token
             "encrypted_card": encrypted_card,
             "aes_key": base64.b64encode(aes_key).decode(),
-            "search_token": search_token,
             "role": "customer",
             "created_at": datetime.utcnow().isoformat(),
             "mldsa_public_key": base64.b64encode(public_key).decode(),
@@ -198,39 +213,50 @@ def login():
         data = request.get_json()
         if not data:
             return jsonify({"error": "Invalid JSON data"}), 400
-
         username = data.get('username')
         password = data.get('password')
-
         if not username or not password:
             return jsonify({"error": "Thiếu username hoặc password"}), 400
-
         if not db:
             return jsonify({"error": "Database connection failed"}), 500
 
-        search_token = generate_search_token(username, token_secret)
-        query = db.collection('Users').where('search_token', '==', search_token).limit(1).stream()
-        user_doc = next(query, None)
+        # Tìm người dùng bằng username
+        users_ref = db.collection('Users').document(username)
+        user_doc = users_ref.get()
         
-        if not user_doc:
+        if not user_doc.exists:
+            return jsonify({"error": "Username không tồn tại"}), 400
+        
+        user_data = user_doc.to_dict()
+        
+        # Xác minh search token
+        search_token_salt = user_data.get('search_token_salt')
+        if not search_token_salt:
+            return jsonify({"error": "Không tìm thấy salt cho search token"}), 500
+        search_h = SHA256.new()
+        search_h.update(base64.b64decode(search_token_salt) + username.encode())
+        if search_h.hexdigest() != user_data.get('search_token'):
             return jsonify({"error": "Username không tồn tại"}), 400
 
-        user_data = user_doc.to_dict()
-        hashed_input_pw = hash_password(password)
-        user_ref = db.collection('Users').document(username)
-        # Đảm bảo generate key runtime cho user nếu mất
+        # Xác minh mật khẩu
+        password_salt = user_data.get('password_salt')
+        if not password_salt:
+            return jsonify({"error": "Không tìm thấy salt cho mật khẩu"}), 500
+        hashed_input_pw = SHA256.new()
+        hashed_input_pw.update(base64.b64decode(password_salt) + password.encode())
+        if hashed_input_pw.hexdigest() != user_data.get('password_hash'):
+            return jsonify({"error": "Mật khẩu không đúng"}), 401
+
+        # Đảm bảo khóa ML-DSA
         if username not in PRIVATE_KEYS:
             public_key, private_key = generate_mldsa_keys()
             PRIVATE_KEYS[username] = private_key
-            user_ref.update({"mldsa_public_key": base64.b64encode(public_key).decode()})
+            users_ref.update({"mldsa_public_key": base64.b64encode(public_key).decode()})
             app.logger.info(f"PRIVATE_KEYS regenerated for {username} on login")
 
-        if hashed_input_pw != user_data.get("password_hash"):
-            return jsonify({"error": "Mật khẩu không đúng"}), 401
-
         session['username'] = username
-        session['role'] = user_data.get("role", "customer")
-        session['quantum_safe_enabled'] = True  # Always True since ML-DSA is required
+        session['role'] = user_data.get('role', 'customer')
+        session['quantum_safe_enabled'] = True
         
         return jsonify({
             "message": "Đăng nhập thành công",
