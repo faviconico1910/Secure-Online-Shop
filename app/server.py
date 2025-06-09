@@ -14,6 +14,13 @@ import hashlib
 logging.basicConfig(level=logging.DEBUG)
 from vnpay import create_vnpay_instance
 
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.backends import default_backend
+
+ECDHE_KEYS = {}  # lưu ephemeral private key tạm thời cho mỗi phiên (user/session)
+
 # Yêu cầu liboqs-python để sử dụng ML-DSA
 try:
     import oqs
@@ -54,8 +61,72 @@ vnpay = create_vnpay_instance(
     return_url=VNPAY_RETURN_URL
 )
 
-def encrypt_card(card_number, key):
+# Trong /init_ecdh
+@app.route('/init_ecdh', methods=['POST'])
+def init_ecdh():
+    data = request.get_json()
+    is_registration = data.get('is_registration', False) if data else False
+
+    if not is_registration and 'username' not in session:
+        app.logger.warning("Khởi tạo ECDHE thất bại: Không có username trong session")
+        return jsonify({'error': 'Chưa đăng nhập: Vui lòng đăng nhập trước'}), 401
+
     try:
+        if not data or 'client_pub' not in data:
+            app.logger.error("Lỗi khởi tạo ECDHE: Thiếu hoặc khóa công khai client không hợp lệ")
+            return jsonify({'error': 'Yêu cầu không hợp lệ: Thiếu khóa công khai client'}), 400
+
+        client_pub_pem = data.get('client_pub')
+        try:
+            client_public_key = serialization.load_pem_public_key(
+                client_pub_pem.encode(), backend=default_backend()
+            )
+        except Exception as e:
+            app.logger.error(f"Lỗi phân tích khóa công khai client: {e}")
+            return jsonify({'error': 'Khóa công khai client không hợp lệ'}), 400
+
+        server_private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
+        server_public_key = server_private_key.public_key()
+
+        shared_key = server_private_key.exchange(ec.ECDH(), client_public_key)
+
+        # Đảm bảo khớp với client: sử dụng HKDF để tạo khóa AES 128-bit
+        derived_key = HKDF(
+            algorithm=hashes.SHA256(),
+            length=16,  # 128-bit key
+            salt=None,
+            info=b'handshake data',
+            backend=default_backend()
+        ).derive(shared_key)
+
+        if is_registration:
+            import uuid
+            temp_token = str(uuid.uuid4())
+            ECDHE_KEYS[temp_token] = derived_key
+            app.logger.debug(f"Lưu temp_token: {temp_token} với khóa: {derived_key.hex()}")
+            server_pub_pem = server_public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).decode()
+            return jsonify({'server_pub': server_pub_pem, 'temp_token': temp_token})
+        else:
+            ECDHE_KEYS[session['username']] = derived_key
+            server_pub_pem = server_public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ).decode()
+            app.logger.info(f"Khởi tạo ECDHE thành công cho user: {session['username']}")
+            return jsonify({'server_pub': server_pub_pem})
+
+    except Exception as e:
+        app.logger.error(f"Lỗi khởi tạo ECDHE: {e}")
+        return jsonify({'error': f'Lỗi server: {str(e)}'}), 500
+
+def encrypt_card_with_ecdh(card_number, username):
+    try:
+        key = ECDHE_KEYS.get(username)
+        if not key:
+            raise ValueError("ECDHE session key not found")
         cipher = AES.new(key, AES.MODE_GCM)
         ciphertext, tag = cipher.encrypt_and_digest(card_number.encode())
         return {
@@ -64,8 +135,21 @@ def encrypt_card(card_number, key):
             'tag': base64.b64encode(tag).decode()
         }
     except Exception as e:
-        print(f"Encryption error: {e}")
+        app.logger.error(f"ECDHE encryption error: {e}")
         return None
+
+def decrypt_with_ecdh(encrypted_b64, iv_b64, username):
+    try:
+        key = ECDHE_KEYS.get(username)
+        if not key:
+            raise ValueError("ECDHE session key not found")
+        cipher = AES.new(key, AES.MODE_GCM, nonce=base64.b64decode(iv_b64))
+        plaintext = cipher.decrypt(base64.b64decode(encrypted_b64))
+        return plaintext.decode('utf-8')
+    except Exception as e:
+        app.logger.error(f"ECDHE decryption error for {username}: {e}")
+        raise ValueError("Decryption failed")
+
 
 def decrypt_card(encrypted_data, key):
     """Decrypt card number using AES-GCM"""
@@ -155,57 +239,76 @@ def register():
         data = request.get_json()
         if not data:
             return jsonify({"error": "Dữ liệu JSON không hợp lệ"}), 400
+
         username = data.get('username')
         password = data.get('password')
-        card = data.get('card')
-        if not username or not password or not card:
-            return jsonify({"error": "Thiếu thông tin đăng ký"}), 400
+        temp_token = data.get('temp_token')
+        encrypted_card = {
+            "ciphertext": data.get('encrypted_card'),
+            "nonce": data.get('card_iv'),
+            "tag": data.get('card_tag')
+        }
+
+        if not username or not password or not temp_token or not all(encrypted_card.values()):
+            return jsonify({"error": "Thiếu thông tin đăng ký hoặc dữ liệu không hợp lệ"}), 400
+
         if not db:
             return jsonify({"error": "Database connection failed"}), 500
+
         users_ref = db.collection('Users')
         query = users_ref.where('username', '==', username).limit(1).stream()
         if any(query):
             return jsonify({"error": "Username đã tồn tại"}), 400
-        
-        # Băm mật khẩu với salt
+
+        # Debug dữ liệu nhận được
+        app.logger.debug(f"Dữ liệu encrypted_card: {encrypted_card}")
+        app.logger.debug(f"temp_token: {temp_token}, ECDHE_KEYS: {ECDHE_KEYS}")
+
+        # Giải mã thẻ tín dụng với temp_token
+        key = ECDHE_KEYS.get(temp_token)
+        if not key:
+            app.logger.error(f"Khóa tạm thời không hợp lệ cho temp_token: {temp_token}")
+            return jsonify({"error": "Khóa tạm thời không hợp lệ"}), 400
+
+        plaintext_card = decrypt_card(encrypted_card, key)
+        if not plaintext_card:
+            app.logger.error(f"Giải mã thất bại với key: {key.hex()}, encrypted_card: {encrypted_card}")
+            return jsonify({"error": "Giải mã thẻ tín dụng thất bại"}), 400
+
+        # Tiếp tục xử lý đăng ký
         password_data = hash_password(password)
         hashed_pw = password_data['hash']
         password_salt = password_data['salt']
-        
-        # Tạo search token với salt
+
         search_token_salt, search_token = generate_search_token(username)
-        
-        # Mã hóa thẻ
-        aes_key = get_random_bytes(16)
-        encrypted_card = encrypt_card(card, aes_key)
-        if not encrypted_card:
-            return jsonify({"error": "Encryption failed"}), 500
-        
-        # Tạo khóa ML-DSA
+
         public_key, private_key = generate_mldsa_keys()
         if not public_key or not private_key:
             return jsonify({"error": "Không tạo được khóa lượng tử"}), 500
-        
-        # Lưu dữ liệu người dùng vào Firestore
+
         user_data = {
             "username": username,
             "password_hash": hashed_pw,
-            "password_salt": password_salt,  # Lưu salt của mật khẩu
+            "password_salt": password_salt,
             "search_token": search_token,
-            "search_token_salt": search_token_salt,  # Lưu salt của search token
+            "search_token_salt": search_token_salt,
             "encrypted_card": encrypted_card,
-            "aes_key": base64.b64encode(aes_key).decode(),
             "role": "customer",
             "created_at": datetime.utcnow().isoformat(),
             "mldsa_public_key": base64.b64encode(public_key).decode(),
             "quantum_safe_enabled": True
         }
+
         users_ref.document(username).set(user_data)
         PRIVATE_KEYS[username] = private_key
+        ECDHE_KEYS.pop(temp_token, None)
+
         return jsonify({"message": "Đăng ký thành công", "quantum_safe": True})
+
     except Exception as e:
         app.logger.error(f"Registration error: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({"error": f"Lỗi server: {str(e)}"}), 500
+
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -269,9 +372,12 @@ def login():
 
 @app.route('/logout')
 def logout():
+    username = session.pop('username', None)
     session.pop('username', None)
     session.pop('role', None)
     session.pop('quantum_safe_enabled', None)
+    if username:
+        PRIVATE_KEYS.pop(username, None)  # Xóa khóa riêng
     return redirect('/')
 
 @app.route('/orders', methods=['POST', 'GET'])
@@ -305,9 +411,20 @@ def order():
                 return jsonify({"error": "Invalid JSON data"}), 400
 
             username = data.get('username')
-            productname = data.get('productname')
-            cost = data.get('cost')
             quantity = data.get('quantity')
+
+            encrypted_name = data.get('productname')
+            name_iv = data.get('productname_iv')
+            encrypted_cost = data.get('cost')
+            cost_iv = data.get('cost_iv')
+
+            # Giải mã với ECDHE
+            try:
+                productname = decrypt_with_ecdh(encrypted_name, name_iv, username)
+                cost_str = decrypt_with_ecdh(encrypted_cost, cost_iv, username)
+                cost = float(cost_str)
+            except Exception as e:
+                return jsonify({"error": "Giải mã thất bại hoặc phiên ECDHE không hợp lệ"}), 400
 
             if not all([username, productname, cost, quantity]):
                 return jsonify({"error": "Thiếu thông tin đơn hàng"}), 400

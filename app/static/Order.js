@@ -132,13 +132,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Gửi từng sản phẩm trong giỏ hàng đến server
             for (const item of cart) {
+                const encryptedName = await aesEncrypt(item.name);
+                const encryptedCost = await aesEncrypt(item.price.toString());
+                
                 const response = await fetch('/orders', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         username: username,
-                        productname: item.name,
-                        cost: item.price,
+                        productname: encryptedName.ciphertext,
+                        productname_iv: encryptedName.iv,
+                        cost: encryptedCost.ciphertext,
+                        cost_iv: encryptedCost.iv,
                         quantity: item.quantity
                     })
                 });
