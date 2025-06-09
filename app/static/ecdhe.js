@@ -8,7 +8,7 @@ async function initECDHE(isRegistration = false) {
                 namedCurve: "P-256",
             },
             true,
-            ["deriveKey"]
+            ["deriveBits"]
         );
 
         const publicKeyBuffer = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
@@ -44,17 +44,39 @@ async function initECDHE(isRegistration = false) {
             false,
             []
         );
-
-        sessionAesKey = await window.crypto.subtle.deriveKey(
+        
+        // 1. deriveBits
+        const sharedBits = await window.crypto.subtle.deriveBits(
             {
                 name: "ECDH",
                 public: serverKey
             },
             keyPair.privateKey,
+            256  // phải >= độ dài HKDF input (SHA-256)
+        );
+
+        // 2. Áp dụng HKDF giống server
+        const keyMaterial = await window.crypto.subtle.importKey(
+            "raw",
+            sharedBits,
+            { name: "HKDF" },
+            false,
+            ["deriveKey"]
+        );
+
+        sessionAesKey = await window.crypto.subtle.deriveKey(
+            {
+                name: "HKDF",
+                hash: "SHA-256",
+                salt: new Uint8Array([]), // salt=None bên Python
+                info: new TextEncoder().encode("handshake data")
+            },
+            keyMaterial,
             { name: "AES-GCM", length: 128 },
             true,
             ["encrypt", "decrypt"]
         );
+
         // Xuất key raw ra log
         const rawKey = await window.crypto.subtle.exportKey('raw', sessionAesKey);
         const rawKeyHex = Array.from(new Uint8Array(rawKey))

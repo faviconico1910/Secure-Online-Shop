@@ -413,15 +413,25 @@ def order():
             username = data.get('username')
             quantity = data.get('quantity')
 
-            encrypted_name = data.get('productname')
-            name_iv = data.get('productname_iv')
-            encrypted_cost = data.get('cost')
-            cost_iv = data.get('cost_iv')
+            encrypted_name = {
+                "ciphertext": data.get('productname'),
+                "nonce": data.get('productname_iv'),
+                "tag": data.get('productname_tag')
+            }
+            encrypted_cost = {
+                "ciphertext": data.get('cost'),
+                "nonce": data.get('cost_iv'),
+                "tag": data.get('cost_tag')
+            }
 
+            key = ECDHE_KEYS.get(username)
+            if not key:
+                app.logger.warning(f"⚠️ Không tìm thấy ECDHE key cho {username}")
+                return jsonify({"error": "Phiên ECDHE không hợp lệ. Vui lòng đăng nhập lại."}), 400
             # Giải mã với ECDHE
             try:
-                productname = decrypt_with_ecdh(encrypted_name, name_iv, username)
-                cost_str = decrypt_with_ecdh(encrypted_cost, cost_iv, username)
+                productname = decrypt_card(encrypted_name, key)
+                cost_str = decrypt_card(encrypted_cost, key)
                 cost = float(cost_str)
             except Exception as e:
                 return jsonify({"error": "Giải mã thất bại hoặc phiên ECDHE không hợp lệ"}), 400
@@ -493,6 +503,7 @@ def create_payment_url():
     """Tạo URL thanh toán VNPay với bảo mật ML-DSA bắt buộc"""
     if 'username' not in session:
         flash('Vui lòng đăng nhập', 'error')
+        app.logger.warning("Redirect fallback tại bước 1")
         return redirect('/')
     
     username = session['username']
@@ -500,6 +511,7 @@ def create_payment_url():
     
     if not order_id:
         flash('Không tìm thấy mã đơn hàng', 'error')
+        app.logger.warning("Redirect fallback tại bước 2")
         return redirect('/orders')
 
     try:
@@ -509,6 +521,7 @@ def create_payment_url():
         
         if not order_doc.exists:
             flash('Không tìm thấy đơn hàng', 'error')
+            app.logger.warning("Redirect fallback tại bước 3")
             return redirect('/orders')
 
         order = order_doc.to_dict()
@@ -516,6 +529,7 @@ def create_payment_url():
         # Kiểm tra trạng thái đơn hàng
         if order.get('status') == 'resolved':
             flash('Đơn hàng đã được thanh toán', 'info')
+            app.logger.warning("Redirect fallback tại bước 4")
             return redirect('/orders')
         
         # Lấy thông tin user để có ML-DSA keys
@@ -524,6 +538,7 @@ def create_payment_url():
         
         if not user_doc.exists:
             flash('Không tìm thấy thông tin người dùng', 'error')
+            app.logger.warning("Redirect fallback tại bước 5")
             return redirect('/orders')
             
         user_data = user_doc.to_dict()
@@ -531,6 +546,7 @@ def create_payment_url():
         app.logger.info(f"PRIVATE_KEYS hiện tại: {list(PRIVATE_KEYS.keys())}")
         if username not in PRIVATE_KEYS:
             flash('Không tìm thấy khóa ML-DSA. Vui lòng đăng nhập lại.', 'error')
+            app.logger.warning("Redirect fallback tại bước 6")
             return redirect('/orders')
 
         # Tạo payment data để ký
@@ -551,6 +567,7 @@ def create_payment_url():
         if not signature:
             app.logger.error(f"Failed to sign payment data with ML-DSA for user: {username}")
             flash('Không thể ký dữ liệu thanh toán với ML-DSA', 'error')
+            app.logger.warning("Redirect fallback tại bước 7")
             return redirect('/orders')
         
         # Tạo hash bảo mật cho payment
@@ -598,6 +615,7 @@ def create_payment_url():
     except Exception as e:
         app.logger.error(f"Error creating secure payment URL: {e}")
         flash('Có lỗi xảy ra khi tạo URL thanh toán', 'error')
+        app.logger.warning("Redirect fallback tại bước 7")
         return redirect('/orders')
 
 @app.route('/payment_return')

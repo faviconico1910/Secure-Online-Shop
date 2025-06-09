@@ -142,8 +142,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         username: username,
                         productname: encryptedName.ciphertext,
                         productname_iv: encryptedName.iv,
+                        productname_tag: encryptedName.tag,
                         cost: encryptedCost.ciphertext,
                         cost_iv: encryptedCost.iv,
+                        cost_tag: encryptedCost.tag,
                         quantity: item.quantity
                     })
                 });

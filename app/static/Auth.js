@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const data = await res.json();
                 if (res.ok) {
                     alert('Đăng nhập thành công!');
+                    window.sessionStorage.removeItem('ecdhe_temp_token');
                     await initECDHE();
                     window.location.reload();
                 } else {
@@ -136,4 +137,16 @@ document.addEventListener('DOMContentLoaded', function () {
             toggleText.innerHTML = 'Đã có tài khoản? <a href="javascript:void(0)" onclick="toggleAuthForm()">Đăng nhập</a>';
         }
     };
+});
+
+document.addEventListener('DOMContentLoaded', async function () {
+    // Nếu đã đăng nhập rồi (ví dụ có nút logout hiển thị) thì khởi tạo ECDHE luôn
+    if (document.getElementById('logout')) {
+        try {
+            await initECDHE();
+            console.log("✅ Đã khởi tạo lại ECDHE sau khi reload trang");
+        } catch (e) {
+            console.error("❌ Lỗi khởi tạo lại ECDHE:", e.message);
+        }
+    }
 });
