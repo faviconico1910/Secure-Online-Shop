@@ -296,14 +296,13 @@ def register():
             "role": "customer",
             "created_at": datetime.utcnow().isoformat(),
             "mldsa_public_key": base64.b64encode(public_key).decode(),
-            "quantum_safe_enabled": True
         }
 
         users_ref.document(username).set(user_data)
         PRIVATE_KEYS[username] = private_key
         ECDHE_KEYS.pop(temp_token, None)
 
-        return jsonify({"message": "Đăng ký thành công", "quantum_safe": True})
+        return jsonify({"message": "Đăng ký thành công"})
 
     except Exception as e:
         app.logger.error(f"Registration error: {e}")
@@ -359,11 +358,9 @@ def login():
 
         session['username'] = username
         session['role'] = user_data.get('role', 'customer')
-        session['quantum_safe_enabled'] = True
         
         return jsonify({
-            "message": "Đăng nhập thành công",
-            "quantum_safe": True
+            "message": "Đăng nhập thành công"
         })
 
     except Exception as e:
@@ -375,7 +372,6 @@ def logout():
     username = session.pop('username', None)
     session.pop('username', None)
     session.pop('role', None)
-    session.pop('quantum_safe_enabled', None)
     if username:
         PRIVATE_KEYS.pop(username, None)  # Xóa khóa riêng
     return redirect('/')
@@ -592,7 +588,6 @@ def create_payment_url():
             'payment_data': payment_data,
             'payment_hash': payment_hash,
             'signature': signature,
-            'quantum_safe_used': True,
             'created_at': payment_timestamp
         }
         
@@ -602,7 +597,6 @@ def create_payment_url():
             'order_id': order_id,
             'username': username,
             'payment_hash': payment_hash,
-            'quantum_safe_used': True,
             'signature_created': True,
             'created_at': payment_timestamp,
             'status': 'pending'
@@ -684,7 +678,6 @@ def payment_return():
                     'payment_method': 'vnpay',
                     'transaction_ref': txn_ref,
                     'paid_at': datetime.now(timezone(timedelta(hours=7))),
-                    'quantum_safe_verified': True,
                     'signature_verified': True
                 })
                 
@@ -753,7 +746,6 @@ def payment_security_info(txn_ref):
             
         return jsonify({
             "transaction_ref": txn_ref,
-            "quantum_safe_used": True,
             "signature_verified": security_data.get('signature_verified', False),
             "status": security_data.get('status', 'unknown'),
             "created_at": security_data.get('created_at'),
