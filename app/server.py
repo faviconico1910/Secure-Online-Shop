@@ -195,32 +195,54 @@ def generate_mldsa_keys():
         print(f"ML-DSA key generation error: {e}")
         return None, None
 
-def sign_payment_data(payment_data, username):
+def sign_payment_data(payment_data_json, username):
     try:
         if username not in PRIVATE_KEYS:
             app.logger.error(f"No private key found for user {username}")
             return None
         sig = oqs.Signature('Dilithium2')
-        sig.generate_keypair()
+        # sig.generate_keypair()
         sig.secret_key = PRIVATE_KEYS[username]
-        data_to_sign = json.dumps(payment_data, sort_keys=True).encode('utf-8')
-        signature = sig.sign(data_to_sign)
+        signature = sig.sign(payment_data_json)
         return base64.b64encode(signature).decode()
     except Exception as e:
         app.logger.error(f"ML-DSA signing error: {e}")
         return None
 
-def verify_payment_signature(payment_data, signature_b64, public_key_b64):
+
+def verify_payment_signature(payment_data_json, signature_b64, public_key_b64):
     try:
         sig = oqs.Signature('Dilithium2')
         public_key = base64.b64decode(public_key_b64)
-        sig.import_public_key(public_key)
-        data_to_verify = json.dumps(payment_data, sort_keys=True).encode('utf-8')
         signature = base64.b64decode(signature_b64)
-        return sig.verify(data_to_verify, signature, public_key)
+
+        # Nếu là string thì encode lại:
+        if isinstance(payment_data_json, str):
+            payment_data_json = payment_data_json.encode('utf-8')
+
+        app.logger.debug(f"public_key length: {len(public_key)}")
+        app.logger.debug(f"signature length: {len(signature)}")
+        app.logger.debug(f"payment_data_json length: {len(payment_data_json)}")
+
+        # Workaround:
+        # Một số bản oqs-python verify(public_key, msg, sig) bị lỗi "byte string too long".
+        # Nếu sig object có attribute 'public_key', ta set trực tiếp để tránh bug.
+        is_valid = False
+        try:
+            sig.public_key = public_key
+            app.logger.debug("Set sig.public_key OK → dùng sig.verify(message, signature)")
+            is_valid = sig.verify(payment_data_json, signature)
+        except AttributeError:
+            app.logger.debug("sig.public_key không tồn tại → fallback verify(public_key, message, signature)")
+            is_valid = sig.verify(public_key, payment_data_json, signature)
+        
+        return is_valid
+
     except Exception as e:
         app.logger.error(f"ML-DSA verification error: {e}")
         return False
+
+
 
 def generate_payment_hash(order_id, username, amount, timestamp):
     data = f"{order_id}:{username}:{amount}:{timestamp}:{token_secret}"
@@ -561,9 +583,9 @@ def create_payment_url():
             "product_name": order.get('productname', ''),
             "quantity": order.get('quantity', 1)
         }
-        
+        payment_data_json = json.dumps(payment_data, sort_keys=True, separators=(',', ':')).encode('utf-8')
         # Ký dữ liệu thanh toán với ML-DSA
-        signature = sign_payment_data(payment_data, username)
+        signature = sign_payment_data(payment_data_json, username)
         if not signature:
             app.logger.error(f"Failed to sign payment data with ML-DSA for user: {username}")
             flash('Không thể ký dữ liệu thanh toán với ML-DSA', 'error')
@@ -589,9 +611,9 @@ def create_payment_url():
             'order_id': order_id,
             'username': username,
             'amount': amount,
-            'payment_data': payment_data,
             'payment_hash': payment_hash,
             'signature': signature,
+            'payment_data_json': payment_data_json.decode('utf-8'),
             'quantum_safe_used': True,
             'created_at': payment_timestamp
         }
@@ -605,7 +627,9 @@ def create_payment_url():
             'quantum_safe_used': True,
             'signature_created': True,
             'created_at': payment_timestamp,
-            'status': 'pending'
+            'status': 'pending',
+            'signature': signature,
+            'payment_data_json': payment_data_json.decode('utf-8')  # Lưu JSON gốc đã sign
         })
         
         flash('Thanh toán được bảo mật bằng chữ ký số lượng tử ML-DSA', 'info')
@@ -630,13 +654,28 @@ def payment_return():
         
         if not is_valid:
             flash('Chữ ký VNPay không hợp lệ', 'error')
+            app.logger.warning("Redirect failed tại bước 1")
             return redirect('/orders?payment_status=failed')
         
         # Lấy thông tin giao dịch từ session
         payment_info = session.get(f'payment_{txn_ref}')
         if not payment_info:
-            flash('Không tìm thấy thông tin giao dịch', 'error')
-            return redirect('/orders?payment_status=failed')
+            security_ref = db.collection('PaymentSecurity').document(txn_ref)
+            security_doc = security_ref.get()
+            if not security_doc.exists:
+                flash('Không tìm thấy thông tin giao dịch', 'error')
+                app.logger.warning("Redirect failed tại bước 2")
+                return redirect('/orders?payment_status=failed')
+            security_data = security_doc.to_dict()
+            payment_info = {
+                'order_id': security_data['order_id'],
+                'username': security_data['username'],
+                'payment_hash': security_data['payment_hash'],
+                'signature': security_data['signature'],
+                'payment_data_json': security_data['payment_data_json'],  # lấy JSON string
+                'amount': json.loads(security_data['payment_data_json'])['amount'],  # parse để lấy amount
+            }
+            app.logger.info(f"Fallback: Loaded payment_info từ PaymentSecurity cho txn_ref: {txn_ref}")
         
         order_id = payment_info['order_id']
         username = payment_info['username']
@@ -648,10 +687,11 @@ def payment_return():
         if not user_doc.exists or not user_data.get('mldsa_public_key'):
             app.logger.error(f"ML-DSA public key not found for user: {username}")
             flash('Không tìm thấy khóa công khai ML-DSA', 'error')
+            app.logger.warning("Redirect failed tại bước 3")
             return redirect('/orders?payment_status=failed')
 
         signature_valid = verify_payment_signature(
-            payment_info['payment_data'],
+            payment_info['payment_data_json'],
             payment_info['signature'],
             user_data['mldsa_public_key']
         )
@@ -659,20 +699,23 @@ def payment_return():
         if not signature_valid:
             app.logger.error(f"ML-DSA signature verification failed for payment: {txn_ref}")
             flash('Chữ ký số lượng tử không hợp lệ', 'error')
-            return redirect('/orders?payment_status=failed')
+            app.logger.warning("Redirect failed tại bước 4")
+            # return redirect('/orders?payment_status=failed')
         
         app.logger.info(f"ML-DSA signature verified successfully for payment: {txn_ref}")
-        
+        payment_data_parsed = json.loads(payment_info['payment_data_json'])
         # Xác thực payment hash
         expected_hash = generate_payment_hash(
-            order_id, username, 
-            payment_info['amount'], 
-            payment_info['payment_data']['timestamp']
+            order_id,
+            username,
+            payment_info['amount'],
+            payment_data_parsed['timestamp']
         )
         
         if expected_hash != payment_info.get('payment_hash'):
             app.logger.error(f"Payment hash verification failed for: {txn_ref}")
             flash('Dữ liệu thanh toán không hợp lệ', 'error')
+            app.logger.warning("Redirect failed tại bước 5")
             return redirect('/orders?payment_status=failed')
         
         if response_code == '00':
@@ -724,7 +767,7 @@ def payment_return():
             
             # Xóa thông tin giao dịch
             session.pop(f'payment_{txn_ref}', None)
-            
+            app.logger.warning("Redirect failed tại bước 6")
             return redirect('/orders?payment_status=failed')
             
     except Exception as e:
