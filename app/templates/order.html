@@ -133,64 +133,81 @@
 </div>
 
 <script>
-let currentOrderId = '';
+// let currentOrderId = '';
+
+let currentOrder = {};  // global
 
 function showPaymentConfirm(orderId, productName, cost, quantity) {
-    currentOrderId = orderId;
-    const total = cost * quantity;
-    // Format giá tiền
+    currentOrder = {
+        orderId: orderId,
+        productName: productName,
+        cost: parseInt(cost),
+        quantity: parseInt(quantity),
+        timestamp: Date.now()
+    };
+
+    const total = currentOrder.cost * currentOrder.quantity;
     const formattedCost = new Intl.NumberFormat('vi-VN').format(total) + ' VNĐ';
-    // Hiển thị thông tin đơn hàng
+
     document.getElementById('orderDetails').innerHTML = `
         <table class="table table-sm">
-            <tr>
-                <td><strong>Mã đơn hàng:</strong></td>
-                <td>${orderId}</td>
-            </tr>
-            <tr>
-                <td><strong>Sản phẩm:</strong></td>
-                <td>${productName}</td>
-            </tr>
-            <tr>
-                <td><strong>Số lượng:</strong></td>
-                <td>${quantity}</td>
-            </tr>
-            <tr>
-                <td><strong>Tổng tiền:</strong></td>
-                <td class="text-success fw-bold">${formattedCost}</td>
-            </tr>
+            <tr><td><strong>Mã đơn hàng:</strong></td><td>${orderId}</td></tr>
+            <tr><td><strong>Sản phẩm:</strong></td><td>${productName}</td></tr>
+            <tr><td><strong>Số lượng:</strong></td><td>${quantity}</td></tr>
+            <tr><td><strong>Tổng tiền:</strong></td><td class="text-success fw-bold">${formattedCost}</td></tr>
         </table>
     `;
-    
-    // Hiển thị modal
+
     const modal = new bootstrap.Modal(document.getElementById('paymentConfirmModal'));
     modal.show();
-    
-    // Gắn sự kiện cho nút thanh toán
-    document.getElementById('proceedPaymentBtn').onclick = function() {
-        processVNPayPayment(orderId);
+
+    document.getElementById('proceedPaymentBtn').onclick = function () {
+        processVNPayPayment();
     };
 }
 
-function processVNPayPayment(orderId) {
-    console.log("Processing payment for order:", orderId); // Debug
+async function processVNPayPayment() {
     const btn = document.getElementById('proceedPaymentBtn');
     const btnText = document.getElementById('paymentBtnText');
     const loadingText = document.getElementById('paymentLoading');
-    
-    // Hiển thị loading
+
     btnText.classList.add('d-none');
     loadingText.classList.remove('d-none');
     btn.disabled = true;
-    
-    // Hiển thị toast thông báo
-    showToast('liveToast-payment-success');
-    
-    // Chuyển hướng đến VNPay sau 1 giây
-    setTimeout(() => {
-        window.location.href = `/create_payment_url?order_id=${orderId}`;
-    }, 1000);
+
+    try {
+        const payload = JSON.stringify(currentOrder);
+        const signature = await signMessage(payload);
+        const signatureArray = Array.from(signature);
+
+        const res = await fetch('/api/submit_signed_order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                payload,
+                signature: signatureArray
+            })
+        });
+
+        if (!res.ok) {
+            throw new Error("Lỗi khi gửi chữ ký");
+        }
+
+        showToast('liveToast-payment-success');
+
+        setTimeout(() => {
+            window.location.href = `/create_payment_url?order_id=${currentOrder.orderId}`;
+        }, 1000);
+
+    } catch (err) {
+        console.error(err);
+        showToast('liveToast-payment-error');
+        btnText.classList.remove('d-none');
+        loadingText.classList.add('d-none');
+        btn.disabled = false;
+    }
 }
+
 
 function showToast(toastId) {
     const toastElement = document.getElementById(toastId);
@@ -214,6 +231,8 @@ window.addEventListener('load', function() {
     }
 });
 </script>
+<script src="{{ url_for('static', filename='oqs_wrapper.js') }}"></script>
+<script src="{{ url_for('static', filename='signing.js') }}"></script>
 
 <!-- Container -->
 {% endblock %}

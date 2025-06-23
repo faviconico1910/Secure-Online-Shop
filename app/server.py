@@ -756,5 +756,55 @@ def payment_security_info(txn_ref):
         app.logger.error(f"Error fetching payment security info: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/api/submit_signed_order', methods=['POST'])
+def submit_signed_order():
+    if 'username' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        data = request.get_json()
+        if not data or 'payload' not in data or 'signature' not in data:
+            return jsonify({"error": "Invalid data"}), 400
+
+        username = session['username']
+        payload_json = data['payload']
+        signature_bytes = bytes(data['signature'])  # từ mảng Uint8Array
+
+        # Parse lại payload thành dict
+        payment_data = json.loads(payload_json)
+
+        # Lấy public key từ Firebase
+        user_ref = db.collection('Users').document(username)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({"error": "User not found"}), 404
+
+        user_data = user_doc.to_dict()
+        public_key_b64 = user_data.get('mldsa_public_key')
+        if not public_key_b64:
+            return jsonify({"error": "Public key missing"}), 400
+
+        # Xác minh chữ ký
+        is_valid = verify_payment_signature(payment_data, base64.b64encode(signature_bytes).decode(), public_key_b64)
+
+        if not is_valid:
+            app.logger.warning(f"❌ ML-DSA verification failed for user: {username}")
+            return jsonify({"error": "Chữ ký không hợp lệ"}), 400
+
+        app.logger.info(f"✅ ML-DSA signature verified successfully for user: {username}")
+        
+        # Lưu tạm vào session hoặc database (tùy)
+        session[f"signed_order_{payment_data['order_id']}"] = {
+            "data": payment_data,
+            "signature": base64.b64encode(signature_bytes).decode()
+        }
+
+        return jsonify({"message": "Đã xác minh chữ ký thành công"}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in /api/submit_signed_order: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
