@@ -13,7 +13,7 @@ import json
 import hashlib
 logging.basicConfig(level=logging.DEBUG)
 from vnpay import create_vnpay_instance
-
+import time
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -46,6 +46,7 @@ except Exception as e:
 
 # Local in-memory store for private keys
 PRIVATE_KEYS = {}
+PUBLIC_KEYS = {}   # username -> bytes của public_key
 
 # Lấy giá trị từ biến môi trường
 VNPAY_TMN_CODE = os.getenv('VNPAY_TMN_CODE')
@@ -190,6 +191,9 @@ def generate_mldsa_keys():
         sig = oqs.Signature('Dilithium2')
         public_key = sig.generate_keypair()
         private_key = sig.export_secret_key()
+        if not public_key or not private_key:
+            return None, None
+
         return public_key, private_key
     except Exception as e:
         print(f"ML-DSA key generation error: {e}")
@@ -197,14 +201,23 @@ def generate_mldsa_keys():
 
 def sign_payment_data(payment_data, username):
     try:
-        if username not in PRIVATE_KEYS:
-            app.logger.error(f"No private key found for user {username}")
+        if username not in PRIVATE_KEYS or PRIVATE_KEYS[username] is None:
+            app.logger.error(f"No private key found or it's None for user {username}")
             return None
         sig = oqs.Signature('Dilithium2')
-        sig.generate_keypair()
-        sig.secret_key = PRIVATE_KEYS[username]
+        if hasattr(sig, 'import_secret_key'):
+            sig.import_secret_key(PRIVATE_KEYS[username])
+        else:
+            sig.secret_key = PRIVATE_KEYS[username]  # fallback nếu import_secret_key không có
+
         data_to_sign = json.dumps(payment_data, sort_keys=True).encode('utf-8')
+        app.logger.debug(f"[🔑] secret_key type = {type(PRIVATE_KEYS[username])}, len = {len(PRIVATE_KEYS[username])}")
+
         signature = sig.sign(data_to_sign)
+
+        if signature is None:
+            app.logger.error("sig.sign() trả về None")
+            return None
         return base64.b64encode(signature).decode()
     except Exception as e:
         app.logger.error(f"ML-DSA signing error: {e}")
@@ -212,6 +225,10 @@ def sign_payment_data(payment_data, username):
     
 def verify_payment_signature(payment_data, signature_b64, public_key_b64):
     try:
+        payment_data['cost'] = int(payment_data['cost'])  # ⚠️ ép về int như khi ký
+        payment_data['quantity'] = int(payment_data['quantity'])
+        payment_data['timestamp'] = int(payment_data['timestamp'])
+
         public_key = base64.b64decode(public_key_b64)
         signature = base64.b64decode(signature_b64)
 
@@ -221,17 +238,24 @@ def verify_payment_signature(payment_data, signature_b64, public_key_b64):
         app.logger.debug(f"[CHECK] verify doc: {sig.verify.__doc__}")
 
         # ✅ Lấy raw_message từ client để so sánh (nếu có)
-        client_message = request.json.get("payload")
+        client_message = None
+        if request.is_json:
+            try:
+                client_message = request.get_json().get("payload")
+            except Exception:
+                pass  # hoặc log thêm nếu cần
+
         server_message = json.dumps(payment_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
-        if client_message != server_message:
-            app.logger.warning("[🚨] MISMATCH message!")
+        if client_message is not None and client_message != server_message:
+            app.logger.debug("[🚨] MISMATCH message!")
             for i, (c1, c2) in enumerate(zip(client_message, server_message)):
                 if c1 != c2:
-                    app.logger.warning(f"First diff at char {i}: {c1} != {c2}")
+                    app.logger.debug(f"First diff at char {i}: {c1} != {c2}")
                     break
-            else:
-                app.logger.info("[✅] raw_message matches!")
+        elif client_message == server_message:
+            app.logger.debug("[✅] raw_message matches!")
+
 
         data_to_verify = client_message.encode("utf-8") if client_message else server_message.encode("utf-8")
 
@@ -379,6 +403,8 @@ def login():
         # Đảm bảo khóa ML-DSA
         if username not in PRIVATE_KEYS:
             public_key, private_key = generate_mldsa_keys()
+            if not public_key or not private_key:
+                return jsonify({"error": "Không tạo được khóa lượng tử"}), 500
             PRIVATE_KEYS[username] = private_key
             users_ref.update({"mldsa_public_key": base64.b64encode(public_key).decode()})
             app.logger.info(f"PRIVATE_KEYS regenerated for {username} on login")
@@ -572,58 +598,89 @@ def create_payment_url():
             app.logger.warning("Redirect fallback tại bước 6")
             return redirect('/orders')
 
-        # Tạo payment data để ký
-        amount = float(order.get('cost', 0))
-        payment_timestamp = datetime.utcnow().isoformat()
+        # # Tạo payment data để ký
+        # amount = float(order.get('cost', 0))
+        # payment_timestamp = int(time.time() * 1000) 
         
-        payment_data = {
-            "order_id": order_id,
-            "username": username,
-            "amount": amount,
-            "timestamp": payment_timestamp,
-            "product_name": order.get('productname', ''),
-            "quantity": order.get('quantity', 1)
-        }
-        
-        # Ký dữ liệu thanh toán với ML-DSA
-        signature = sign_payment_data(payment_data, username)
+        # payment_data = {
+        #     "orderId": order_id,
+        #     "username": username,
+        #     "cost": amount,
+        #     "timestamp": payment_timestamp,
+        #     "productName": order.get('productname', ''),
+        #     "quantity": order.get('quantity', 1)
+        # }
+        # app.logger.debug(f"[🧾] payment_data = {json.dumps(payment_data, ensure_ascii=False, indent=2)}")
+
+        # # Ký dữ liệu thanh toán với ML-DSA
+        # signature = sign_payment_data(payment_data, username)
+                # ✅ Dùng lại bản đã ký được lưu ở bước trước
+        signed_doc = db.collection("PaymentSecurityDrafts").document(order_id).get()
+        if not signed_doc.exists:
+            flash('Không tìm thấy dữ liệu đã ký', 'error')
+            app.logger.warning("Redirect fallback tại bước 7")
+            return redirect('/orders')
+
+        signed = signed_doc.to_dict()
+
+        if not signed:
+            flash('Không tìm thấy dữ liệu đã ký', 'error')
+            app.logger.warning("Redirect fallback tại bước 7")
+            return redirect('/orders')
+
+        payment_data = signed["data"]
+        signature = signed["signature"]
+        public_key_b64 = signed["public_key"]
+
+        # Xác minh lại chữ ký để đảm bảo integrity
+        is_valid = verify_payment_signature(payment_data, signature, public_key_b64)
+        if not is_valid:
+            flash('Chữ ký không hợp lệ. Vui lòng tạo lại đơn hàng.', 'error')
+            app.logger.warning("Redirect fallback tại bước 8")
+            return redirect('/orders')
+
+        amount = float(payment_data["cost"])
+        payment_timestamp = int(payment_data["timestamp"])
+
+        public_key_bytes = base64.b64decode(user_data['mldsa_public_key'])
+        PUBLIC_KEYS[username] = public_key_bytes
+
+
+        public_key_b64 = base64.b64encode(public_key_bytes).decode()
+       
         if not signature:
             app.logger.error(f"Failed to sign payment data with ML-DSA for user: {username}")
             flash('Không thể ký dữ liệu thanh toán với ML-DSA', 'error')
-            app.logger.warning("Redirect fallback tại bước 7")
+            app.logger.warning("Redirect fallback tại bước 9")
             return redirect('/orders')
-        
+       
         # Tạo hash bảo mật cho payment
         payment_hash = generate_payment_hash(order_id, username, amount, payment_timestamp)
-        
+       
         # Tạo URL thanh toán VNPay
         order_info = f"Thanh toan don hang {order_id}"
         ip_addr = request.remote_addr or '127.0.0.1'
-        
+
         payment_url, txn_ref = vnpay.create_payment_url(
             order_info=order_info,
             amount=amount,
             order_id=order_id,
             ip_addr=ip_addr
         )
-
-        # Lưu thông tin payment vào session với security data
-        session[f'payment_{txn_ref}'] = {
-            'order_id': order_id,
-            'username': username,
-            'amount': amount,
-            'payment_data': payment_data,
-            'payment_hash': payment_hash,
-            'signature': signature,
-            'created_at': payment_timestamp
-        }
+        
+        session['current_txn_ref'] = txn_ref
         
         # Lưu security metadata vào database
         security_ref = db.collection('PaymentSecurity').document(txn_ref)
         security_ref.set({
             'order_id': order_id,
             'username': username,
+            'amount': amount,
+            'productName': order.get('productname', ''),
+            'quantity': order.get('quantity', 1),
             'payment_hash': payment_hash,
+            'signature': signature,
+            'public_key': public_key_b64,
             'signature_created': True,
             'created_at': payment_timestamp,
             'status': 'pending'
@@ -636,120 +693,71 @@ def create_payment_url():
     except Exception as e:
         app.logger.error(f"Error creating secure payment URL: {e}")
         flash('Có lỗi xảy ra khi tạo URL thanh toán', 'error')
-        app.logger.warning("Redirect fallback tại bước 7")
+        app.logger.warning("Redirect fallback tại bước 10"   )
         return redirect('/orders')
 
 @app.route('/payment_return')
 def payment_return():
-    """Xử lý kết quả trả về từ VNPay với xác thực ML-DSA bắt buộc"""
     try:
-        # Lấy tất cả parameters từ request
-        request_params = dict(request.args)
-        
-        # Xác thực chữ ký VNPay
-        is_valid, response_code, txn_ref = vnpay.verify_return_url(request_params)
-        
-        if not is_valid:
-            flash('Chữ ký VNPay không hợp lệ', 'error')
+        vnp_data = request.args.to_dict()
+        txn_ref = vnp_data.get('vnp_TxnRef')
+        vnp_response_code = vnp_data.get('vnp_ResponseCode')
+    
+        if not txn_ref:
+            flash('Thiếu mã giao dịch', 'error')
             return redirect('/orders?payment_status=failed')
+       
+        # 🔍 Trích order_id từ txn_ref
+        # txn_ref = order_20250624_xxx_yyy_zzz => lấy phần đầu
+        order_id = "_".join(txn_ref.split("_")[:4])
+
         
-        # Lấy thông tin giao dịch từ session
-        payment_info = session.get(f'payment_{txn_ref}')
-        if not payment_info:
+        # 🔍 Đọc lại thông tin từ Firestore
+        security_doc = db.collection('PaymentSecurityDrafts').document(order_id).get()
+        if not security_doc.exists:
             flash('Không tìm thấy thông tin giao dịch', 'error')
             return redirect('/orders?payment_status=failed')
         
-        order_id = payment_info['order_id']
-        username = payment_info['username']
+        security_data = security_doc.to_dict()
+        username = security_data['username']
+        created_at = security_data['created_at']
         
-        # Xác thực ML-DSA signature
-        user_ref = db.collection('Users').document(username)
-        user_doc = user_ref.get()
-        user_data = user_doc.to_dict()
-        if not user_doc.exists or not user_data.get('mldsa_public_key'):
-            app.logger.error(f"ML-DSA public key not found for user: {username}")
-            flash('Không tìm thấy khóa công khai ML-DSA', 'error')
-            return redirect('/orders?payment_status=failed')
+        if hasattr(created_at, 'timestamp'):  # Trường hợp là Firestore Timestamp
+            created_at = int(created_at.timestamp() * 1000)
+        signature_b64 = security_data['signature']
+        public_key_b64 = security_data['public_key']
 
-        signature_valid = verify_payment_signature(
-            payment_info['payment_data'],
-            payment_info['signature'],
-            user_data['mldsa_public_key']
-        )
+        payment_data =  security_data['data']
         
-        if not signature_valid:
-            app.logger.error(f"ML-DSA signature verification failed for payment: {txn_ref}")
-            flash('Chữ ký số lượng tử không hợp lệ', 'error')
+        # ✅ Xác minh chữ ký ML-DSA
+        is_valid = verify_payment_signature(payment_data, signature_b64, public_key_b64)
+        if not is_valid:
+            app.logger.debug('Chữ ký không hợp lệ')
             return redirect('/orders?payment_status=failed')
         
-        app.logger.info(f"ML-DSA signature verified successfully for payment: {txn_ref}")
-        
-        # Xác thực payment hash
-        expected_hash = generate_payment_hash(
-            order_id, username, 
-            payment_info['amount'], 
-            payment_info['payment_data']['timestamp']
-        )
-        
-        if expected_hash != payment_info.get('payment_hash'):
-            app.logger.error(f"Payment hash verification failed for: {txn_ref}")
-            flash('Dữ liệu thanh toán không hợp lệ', 'error')
+        if vnp_response_code != '00':
+            app.logger.debug('Thanh toán không thành công')
             return redirect('/orders?payment_status=failed')
         
-        if response_code == '00':
-            # Thanh toán thành công và chữ ký hợp lệ
-            try:
-                order_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
-                order_ref.update({
-                    'status': 'resolved',
-                    'payment_method': 'vnpay',
-                    'transaction_ref': txn_ref,
-                    'paid_at': datetime.now(timezone(timedelta(hours=7))),
-                    'signature_verified': True
-                })
-                
-                # Cập nhật security record
-                security_ref = db.collection('PaymentSecurity').document(txn_ref)
-                security_ref.update({
-                    'status': 'completed',
-                    'signature_verified': True,
-                    'completed_at': datetime.now(timezone(timedelta(hours=7))).isoformat()
-                })
-                
-                # Xóa thông tin giao dịch khỏi session
-                session.pop(f'payment_{txn_ref}', None)
-                
-                flash('Thanh toán thành công với bảo mật lượng tử ML-DSA!', 'success')
-                return redirect('/orders?payment_status=success')
-                
-            except Exception as e:
-                app.logger.error(f"Error updating order status: {e}")
-                flash('Có lỗi cập nhật đơn hàng', 'warning')
-                return redirect('/orders?payment_status=success')
-        else:
-            # Thanh toán thất bại
-            error_msg = vnpay.get_error_message(response_code)
-            flash(f'Thanh toán thất bại: {error_msg}', 'error')
-            
-            # Cập nhật security record
-            try:
-                security_ref = db.collection('PaymentSecurity').document(txn_ref)
-                security_ref.update({
-                    'status': 'failed',
-                    'failure_reason': error_msg,
-                    'failed_at': datetime.utcnow().isoformat()
-                })
-            except:
-                pass
-            
-            # Xóa thông tin giao dịch
-            session.pop(f'payment_{txn_ref}', None)
-            
-            return redirect('/orders?payment_status=failed')
-            
+        # ✅ Cập nhật trạng thái vào bản ghi
+        db.collection('PaymentSecurityDrafts').document(order_id).update({
+            'status': 'resolved',
+            'resolved_at': firestore.SERVER_TIMESTAMP
+        })
+        
+        # ✅ Cập nhật đơn hàng gốc
+        order_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
+        order_ref.update({
+            'status': 'resolved',
+            'resolved_at': firestore.SERVER_TIMESTAMP
+        })
+
+        flash('Thanh toán thành công!', 'success')
+        return redirect('/orders?payment_status=success')
+
     except Exception as e:
-        app.logger.error(f"Error processing secure payment return: {e}")
-        flash('Có lỗi xảy ra khi xử lý kết quả thanh toán', 'error')
+        app.logger.error(f"[❌] Error in /payment_return: {e}")
+        app.logger.debug('Có lỗi xảy ra khi xử lý kết quả thanh toán')
         return redirect('/orders?payment_status=failed')
 
 @app.route('/payment_security/<txn_ref>')
@@ -792,15 +800,17 @@ def submit_signed_order():
         data = request.get_json()
         if not data or 'payload' not in data or 'signature' not in data or 'public_key' not in data:
             return jsonify({"error": "Invalid data"}), 400
+        
 
         username = session['username']
         payload_json = data['payload']
         signature_bytes = bytes(data['signature'])  # từ mảng Uint8Array
         public_key_b64 = data['public_key']
+        PUBLIC_KEYS[username] = base64.b64decode(public_key_b64)
 
         # Parse lại payload thành dict
         payment_data = json.loads(payload_json)
-
+        
         # Xác minh chữ ký
         is_valid = verify_payment_signature(payment_data, base64.b64encode(signature_bytes).decode(), public_key_b64)
 
@@ -809,13 +819,24 @@ def submit_signed_order():
             return jsonify({"error": "Chữ ký không hợp lệ"}), 400
 
         app.logger.info(f"✅ ML-DSA signature verified successfully for user: {username}")
+       
+        order_id = payment_data['orderId']
 
-        # Lưu tạm vào session hoặc database
-        session[f"signed_order_{payment_data['order_id']}"] = {
+        security_record = {
             "data": payment_data,
+            "orderId": order_id,
+            "username": username,
+            "cost": payment_data.get("cost"),
+            "timestamp": payment_data.get("timestamp"),
+            "productName": payment_data.get("productName"),
+            "quantity": payment_data.get("quantity"),
             "signature": base64.b64encode(signature_bytes).decode(),
-            "public_key": public_key_b64
+            "public_key": public_key_b64,
+            "created_at": firestore.SERVER_TIMESTAMP
         }
+
+        db.collection("PaymentSecurityDrafts").document(order_id).set(security_record)
+
 
         return jsonify({"message": "Đã xác minh chữ ký thành công"}), 200
 

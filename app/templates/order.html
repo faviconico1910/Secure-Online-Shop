@@ -194,7 +194,12 @@ async function processVNPayPayment() {
         console.log("📤 Payload (string to sign):", raw_message);
         const signature = await signMessage(raw_message);
         const signatureArray = Array.from(signature);
-        const signatureBase64 = btoa(String.fromCharCode(...signature));
+
+        function uint8ToBase64(arr) {
+            return btoa(String.fromCharCode.apply(null, arr));
+        }
+        const signatureBase64 = uint8ToBase64(signature);
+        
         console.log("🔑 Signature base64 (client):", signatureBase64);
         const publicKeyBase64 = btoa(String.fromCharCode(...publicKey));
         console.log("pubkey:", publicKeyBase64);

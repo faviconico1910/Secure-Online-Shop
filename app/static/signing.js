@@ -27,11 +27,11 @@ async function signMessage(messageStr) {
   const msgBuf = new Uint8Array(Module.HEAPU8.buffer, msgPtr, messageStr.length);
   for (let i = 0; i < messageStr.length; i++) msgBuf[i] = messageStr.charCodeAt(i);
 
-  const sigPtr = Module._malloc(4595);  // chữ ký Dilithium2
+  const sigPtr = Module._malloc(2420);  // chữ ký Dilithium2
   const sigLenPtr = Module._malloc(4);  // output length
 
   Module._sign(sigPtr, sigLenPtr, msgPtr, messageStr.length, privateKey.byteOffset);
-  const signature = new Uint8Array(Module.HEAPU8.buffer, sigPtr, 4595);
+  const signature = new Uint8Array(Module.HEAPU8.buffer, sigPtr, 2420);
 
   Module._free(msgPtr);
   Module._free(sigLenPtr);
