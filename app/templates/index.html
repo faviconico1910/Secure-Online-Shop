@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Trang chủ - Shop Capybara{% endblock %}
 {% block content %}
-{% if session['role'] == 'admin' %}
-    <button class="btn btn-success" onclick="location.href='/admin/orders'">Đơn hàng đã đặt (Admin)</button>
+{% if session['role'] == '' %}
+    <button class="btn btn-success" onclick="location.href='/seller/orders'">Đơn hàng đã đặt (seller)</button>
 {% else %}
     <button class="btn btn-success" onclick="location.href='/orders'">Đơn hàng đã đặt</button>
 {% endif %}

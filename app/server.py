@@ -209,15 +209,42 @@ def sign_payment_data(payment_data, username):
     except Exception as e:
         app.logger.error(f"ML-DSA signing error: {e}")
         return None
-
+    
 def verify_payment_signature(payment_data, signature_b64, public_key_b64):
     try:
-        sig = oqs.Signature('Dilithium2')
         public_key = base64.b64decode(public_key_b64)
-        sig.import_public_key(public_key)
-        data_to_verify = json.dumps(payment_data, sort_keys=True).encode('utf-8')
         signature = base64.b64decode(signature_b64)
-        return sig.verify(data_to_verify, signature, public_key)
+
+        sig = oqs.Signature("Dilithium2")
+        app.logger.debug(f"[CHECK] type(sig): {type(sig)}")
+        app.logger.debug(f"[CHECK] sig object: {sig}")
+        app.logger.debug(f"[CHECK] verify doc: {sig.verify.__doc__}")
+
+        # ✅ Lấy raw_message từ client để so sánh (nếu có)
+        client_message = request.json.get("payload")
+        server_message = json.dumps(payment_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+        if client_message != server_message:
+            app.logger.warning("[🚨] MISMATCH message!")
+            for i, (c1, c2) in enumerate(zip(client_message, server_message)):
+                if c1 != c2:
+                    app.logger.warning(f"First diff at char {i}: {c1} != {c2}")
+                    break
+            else:
+                app.logger.info("[✅] raw_message matches!")
+
+        data_to_verify = client_message.encode("utf-8") if client_message else server_message.encode("utf-8")
+
+        app.logger.debug(f"[🔍] Server-side string to verify: {data_to_verify.decode()}")
+        app.logger.debug(f"[DEBUG] Pubkey: {public_key_b64}")
+        app.logger.debug(f"[DEBUG] signature_b64: {signature_b64}")
+        app.logger.debug(f"[CHECK] message: type={type(data_to_verify)}, len={len(data_to_verify)}")
+        app.logger.debug(f"[CHECK] signature: type={type(signature)}, len={len(signature)}")
+        app.logger.debug(f"[CHECK] public_key: type={type(public_key)}, len={len(public_key)}")
+        result = sig.verify(data_to_verify, signature, public_key)
+        app.logger.debug(f"[✅] Signature valid: {result}")
+        return result
+
     except Exception as e:
         app.logger.error(f"ML-DSA verification error: {e}")
         return False
@@ -763,26 +790,16 @@ def submit_signed_order():
 
     try:
         data = request.get_json()
-        if not data or 'payload' not in data or 'signature' not in data:
+        if not data or 'payload' not in data or 'signature' not in data or 'public_key' not in data:
             return jsonify({"error": "Invalid data"}), 400
 
         username = session['username']
         payload_json = data['payload']
         signature_bytes = bytes(data['signature'])  # từ mảng Uint8Array
+        public_key_b64 = data['public_key']
 
         # Parse lại payload thành dict
         payment_data = json.loads(payload_json)
-
-        # Lấy public key từ Firebase
-        user_ref = db.collection('Users').document(username)
-        user_doc = user_ref.get()
-        if not user_doc.exists:
-            return jsonify({"error": "User not found"}), 404
-
-        user_data = user_doc.to_dict()
-        public_key_b64 = user_data.get('mldsa_public_key')
-        if not public_key_b64:
-            return jsonify({"error": "Public key missing"}), 400
 
         # Xác minh chữ ký
         is_valid = verify_payment_signature(payment_data, base64.b64encode(signature_bytes).decode(), public_key_b64)
@@ -792,11 +809,12 @@ def submit_signed_order():
             return jsonify({"error": "Chữ ký không hợp lệ"}), 400
 
         app.logger.info(f"✅ ML-DSA signature verified successfully for user: {username}")
-        
-        # Lưu tạm vào session hoặc database (tùy)
+
+        # Lưu tạm vào session hoặc database
         session[f"signed_order_{payment_data['order_id']}"] = {
             "data": payment_data,
-            "signature": base64.b64encode(signature_bytes).decode()
+            "signature": base64.b64encode(signature_bytes).decode(),
+            "public_key": public_key_b64
         }
 
         return jsonify({"message": "Đã xác minh chữ ký thành công"}), 200
@@ -804,6 +822,7 @@ def submit_signed_order():
     except Exception as e:
         app.logger.error(f"Error in /api/submit_signed_order: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
 
 
 if __name__ == '__main__':

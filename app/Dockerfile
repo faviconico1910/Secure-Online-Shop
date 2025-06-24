@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# Install system dependencies
+# Cài công cụ hệ thống
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -8,40 +8,41 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     ninja-build \
     pkg-config \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Build and install liboqs C library
+# Cài đặt liboqs từ branch main
 RUN git clone --depth 1 --branch main https://github.com/open-quantum-safe/liboqs.git && \
     cd liboqs && \
     mkdir build && cd build && \
     cmake -GNinja -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_SHARED_LIBS=ON .. && \
     ninja && \
     ninja install && \
-    cd ../.. && \
-    rm -rf liboqs
+    cd ../.. && rm -rf liboqs
 
-# Configure library path
+# Configure lib path
 RUN ldconfig
 
-# Install liboqs-python from source
-RUN git clone --depth=1 https://github.com/open-quantum-safe/liboqs-python.git && \
+# Cài liboqs-python từ source mới nhất
+RUN git clone --depth 1 --recursive https://github.com/open-quantum-safe/liboqs-python.git && \
     cd liboqs-python && \
-    pip install . && \
-    cd .. && \
-    rm -rf liboqs-python
+    python3 -m pip install . && \
+    cd .. && rm -rf liboqs-python
 
+# Xoá nếu còn bản pip sai
+RUN pip uninstall -y oqs || true
+
+# Tạo môi trường làm việc
 WORKDIR /app
 
-# Copy requirements file
+# Copy file và cài requirements
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies (excluding liboqs-python which we built from source)
-RUN pip install --no-cache-dir flask cryptography pycryptodome firebase-admin python-dotenv==1.0.0
-
-# Copy application files
+# Copy toàn bộ mã nguồn
 COPY . .
 
-# Set environment variables
+# Environment variables
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/lib"
 

@@ -22,7 +22,7 @@ async function signMessage(messageStr) {
   if (!window.readyToSign || !privateKey) {
     throw new Error("Private key chưa sẵn sàng");
   }
-
+  console.log("📩 Signing message:", messageStr);
   const msgPtr = Module._malloc(messageStr.length);
   const msgBuf = new Uint8Array(Module.HEAPU8.buffer, msgPtr, messageStr.length);
   for (let i = 0; i < messageStr.length; i++) msgBuf[i] = messageStr.charCodeAt(i);

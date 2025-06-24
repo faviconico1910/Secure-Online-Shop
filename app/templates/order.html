@@ -165,7 +165,16 @@ function showPaymentConfirm(orderId, productName, cost, quantity) {
         processVNPayPayment();
     };
 }
-
+function canonicalStringify(obj) {
+  const ordered = {};
+  Object.keys(obj).sort().forEach(key => {
+    ordered[key] = obj[key];
+  });
+  return JSON.stringify(ordered);
+}
+function stableStringify(obj) {
+  return JSON.stringify(obj, Object.keys(obj).sort(), 0); // không khoảng trắng
+}
 async function processVNPayPayment() {
     const btn = document.getElementById('proceedPaymentBtn');
     const btnText = document.getElementById('paymentBtnText');
@@ -176,21 +185,32 @@ async function processVNPayPayment() {
     btn.disabled = true;
 
     try {
-        const payload = JSON.stringify(currentOrder);
-        const signature = await signMessage(payload);
-        const signatureArray = Array.from(signature);
+        if (!window.readyToSign || !publicKey) {
+            throw new Error("Khoá chưa sẵn sàng để ký.");
+        }
 
+        const payload = currentOrder;
+        const raw_message = stableStringify(payload);
+        console.log("📤 Payload (string to sign):", raw_message);
+        const signature = await signMessage(raw_message);
+        const signatureArray = Array.from(signature);
+        const signatureBase64 = btoa(String.fromCharCode(...signature));
+        console.log("🔑 Signature base64 (client):", signatureBase64);
+        const publicKeyBase64 = btoa(String.fromCharCode(...publicKey));
+        console.log("pubkey:", publicKeyBase64);
         const res = await fetch('/api/submit_signed_order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                payload,
-                signature: signatureArray
+                payload: raw_message,
+                signature: signatureArray,
+                public_key: publicKeyBase64
             })
         });
 
         if (!res.ok) {
-            throw new Error("Lỗi khi gửi chữ ký");
+            const errData = await res.json();
+            throw new Error(errData.error || "Lỗi khi gửi chữ ký");
         }
 
         showToast('liveToast-payment-success');
