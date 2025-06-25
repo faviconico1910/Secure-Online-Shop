@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block title %}Tất cả đơn hàng - Người bán{% endblock %}
+
+{% block content %}
+<div class="main-content container my-4">
+    <h2>Tất cả đơn hàng của khách hàng</h2>
+
+    {% if orders %}
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Khách hàng</th>
+                    <th>Sản phẩm</th>
+                    <th>Giá</th>
+                    <th>Số lượng</th>
+                    <th>Ngày tạo</th>
+                    <th>Trạng thái</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order.order_id }}</td>
+                    <td>{{ order.username }}</td>
+                    <td>{{ order.productname }}</td>
+                    <td>{{ "{:,.0f}".format(order.cost) }} VNĐ</td>
+                    <td>{{ order.quantity }}</td>
+                    <td>{{ order.created_at }}</td>
+                    <td>
+                        {% if order.status == 'resolved' %}
+                            <span class="badge bg-success">Đã thanh toán</span>
+                        {% elif order.status == 'pending' %}
+                            <span class="badge bg-warning text-dark">Chờ thanh toán</span>
+                        {% elif order.status == 'awaiting_confirmation' %}
+                            <span class="badge bg-info text-dark">Chờ xác nhận</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Không rõ</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if order.status == 'awaiting_confirmation' %}
+                            <button class="btn btn-sm btn-primary"
+                                onclick="confirmOrder('{{ order.order_id }}', '{{ order.username }}', '{{ order.productname }}', '{{ order.cost }}', '{{ order.quantity }}')">
+                                Xác nhận
+                            </button>
+                        {% elif order.status == 'resolved' %}
+                            <button class="btn btn-sm btn-success"
+                                onclick="verifySignature('{{ order.order_id }}', '{{ order.username }}')">
+                                🔎 Xác minh thanh toán
+                            </button>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Không có đơn hàng nào.</p>
+    {% endif %}
+    <script>
+        let currentSellerOrder = {};
+
+        function confirmOrder(orderId, customerUsername, productname, cost, quantity) {
+            if (!window.readyToSign || !publicKey) {
+                alert("Khoá ML-DSA chưa sẵn sàng.");
+                return;
+            }
+
+            currentSellerOrder = {
+                order_id: orderId,
+                username: customerUsername,
+                productname,
+                cost: parseFloat(cost),
+                quantity: parseInt(quantity),
+                timestamp: Date.now()
+            };
+
+            const message = JSON.stringify(currentSellerOrder, Object.keys(currentSellerOrder).sort());
+            signMessage(message)
+                .then(sig => {
+                    const signature = Array.from(sig);
+                    const public_key_b64 = btoa(String.fromCharCode(...publicKey));
+                    
+                    console.log("✍️ [SELLER] Signing message:", message);
+                    console.log("📦 [SELLER] Signature (byte[] length):", signature.length);
+                    console.log("🔑 [SELLER] Public key base64:", public_key_b64);
+
+
+                    fetch('/api/seller_confirm_order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            payload: message,
+                            signature,
+                            public_key: public_key_b64
+                        })
+                    }).then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert("✅ Đơn hàng đã được xác nhận!");
+                            window.location.reload();
+                        } else {
+                            alert("❌ Lỗi: " + data.error);
+                        }
+                    }).catch(err => {
+                        console.error(err);
+                        alert("❌ Gửi xác nhận thất bại");
+                    });
+                });
+        }
+    </script>
+    <script>
+        function verifySignature(orderId, customerUsername) {
+            fetch('/api/verify_payment_signature_seller', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    order_id: orderId,
+                    username: customerUsername
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert("✅ Chữ ký thanh toán hợp lệ. Khách hàng đã xác thực giao dịch.");
+                } else {
+                    alert("❌ Chữ ký KHÔNG hợp lệ: " + (data.error || "Không rõ lỗi"));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("❌ Lỗi xác minh chữ ký.");
+            });
+        }
+        </script>
+
+    <script src="{{ url_for('static', filename='oqs_wrapper.js') }}"></script>
+    <script src="{{ url_for('static', filename='signing.js') }}"></script>
+</div>
+{% endblock %}

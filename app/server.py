@@ -116,7 +116,7 @@ def init_ecdh():
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             ).decode()
-            app.logger.info(f"Khởi tạo ECDHE thành công cho user: {session['username']}")
+            app.logger.info(f"🔐 [ECDHE] Đã tạo khóa phiên ECDHE cho user: {session['username']}")
             return jsonify({'server_pub': server_pub_pem})
 
     except Exception as e:
@@ -130,11 +130,15 @@ def encrypt_card_with_ecdh(card_number, username):
             raise ValueError("ECDHE session key not found")
         cipher = AES.new(key, AES.MODE_GCM)
         ciphertext, tag = cipher.encrypt_and_digest(card_number.encode())
+
+        app.logger.info(f"🔐 [AES-GCM] Mã hóa dữ liệu thẻ cho {username} (ECDHE session)")
+
         return {
             'ciphertext': base64.b64encode(ciphertext).decode(),
             'nonce': base64.b64encode(cipher.nonce).decode(),
             'tag': base64.b64encode(tag).decode()
         }
+        
     except Exception as e:
         app.logger.error(f"ECDHE encryption error: {e}")
         return None
@@ -146,6 +150,7 @@ def decrypt_with_ecdh(encrypted_b64, iv_b64, username):
             raise ValueError("ECDHE session key not found")
         cipher = AES.new(key, AES.MODE_GCM, nonce=base64.b64decode(iv_b64))
         plaintext = cipher.decrypt(base64.b64decode(encrypted_b64))
+        app.logger.info(f"🔐 [AES-GCM] Mã hóa thẻ tín dụng thành công cho {username}")
         return plaintext.decode('utf-8')
     except Exception as e:
         app.logger.error(f"ECDHE decryption error for {username}: {e}")
@@ -161,6 +166,7 @@ def decrypt_card(encrypted_data, key):
         
         cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
         plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+        app.logger.info("🔓 [AES-GCM] Giải mã thẻ tín dụng thành công")
         return plaintext.decode()
     except Exception as e:
         print(f"Decryption error: {e}")
@@ -193,7 +199,7 @@ def generate_mldsa_keys():
         private_key = sig.export_secret_key()
         if not public_key or not private_key:
             return None, None
-
+        app.logger.info("🔑 [ML-DSA] Tạo khóa hậu lượng tử thành công")
         return public_key, private_key
     except Exception as e:
         print(f"ML-DSA key generation error: {e}")
@@ -211,13 +217,13 @@ def sign_payment_data(payment_data, username):
             sig.secret_key = PRIVATE_KEYS[username]  # fallback nếu import_secret_key không có
 
         data_to_sign = json.dumps(payment_data, sort_keys=True).encode('utf-8')
-        app.logger.debug(f"[🔑] secret_key type = {type(PRIVATE_KEYS[username])}, len = {len(PRIVATE_KEYS[username])}")
 
         signature = sig.sign(data_to_sign)
 
         if signature is None:
             app.logger.error("sig.sign() trả về None")
             return None
+        app.logger.info(f"✍️ [ML-DSA] Đã ký dữ liệu thanh toán cho {username}")
         return base64.b64encode(signature).decode()
     except Exception as e:
         app.logger.error(f"ML-DSA signing error: {e}")
@@ -233,9 +239,6 @@ def verify_payment_signature(payment_data, signature_b64, public_key_b64):
         signature = base64.b64decode(signature_b64)
 
         sig = oqs.Signature("Dilithium2")
-        app.logger.debug(f"[CHECK] type(sig): {type(sig)}")
-        app.logger.debug(f"[CHECK] sig object: {sig}")
-        app.logger.debug(f"[CHECK] verify doc: {sig.verify.__doc__}")
 
         # ✅ Lấy raw_message từ client để so sánh (nếu có)
         client_message = None
@@ -259,14 +262,11 @@ def verify_payment_signature(payment_data, signature_b64, public_key_b64):
 
         data_to_verify = client_message.encode("utf-8") if client_message else server_message.encode("utf-8")
 
-        app.logger.debug(f"[🔍] Server-side string to verify: {data_to_verify.decode()}")
-        app.logger.debug(f"[DEBUG] Pubkey: {public_key_b64}")
-        app.logger.debug(f"[DEBUG] signature_b64: {signature_b64}")
-        app.logger.debug(f"[CHECK] message: type={type(data_to_verify)}, len={len(data_to_verify)}")
-        app.logger.debug(f"[CHECK] signature: type={type(signature)}, len={len(signature)}")
-        app.logger.debug(f"[CHECK] public_key: type={type(public_key)}, len={len(public_key)}")
         result = sig.verify(data_to_verify, signature, public_key)
-        app.logger.debug(f"[✅] Signature valid: {result}")
+        if result:
+            app.logger.info("✅ [ML-DSA] Chữ ký hợp lệ (xác minh thành công)")
+        else:
+            app.logger.warning("❌ [ML-DSA] Chữ ký không hợp lệ")
         return result
 
     except Exception as e:
@@ -311,9 +311,6 @@ def register():
         if any(query):
             return jsonify({"error": "Username đã tồn tại"}), 400
 
-        # Debug dữ liệu nhận được
-        app.logger.debug(f"Dữ liệu encrypted_card: {encrypted_card}")
-        app.logger.debug(f"temp_token: {temp_token}, ECDHE_KEYS: {ECDHE_KEYS}")
 
         # Giải mã thẻ tín dụng với temp_token
         key = ECDHE_KEYS.get(temp_token)
@@ -325,7 +322,8 @@ def register():
         if not plaintext_card:
             app.logger.error(f"Giải mã thất bại với key: {key.hex()}, encrypted_card: {encrypted_card}")
             return jsonify({"error": "Giải mã thẻ tín dụng thất bại"}), 400
-
+        
+        app.logger.info(f"🔓 [AES-GCM] Giải mã thành công thông tin thẻ trong quá trình đăng ký cho user: {username}")
         # Tiếp tục xử lý đăng ký
         password_data = hash_password(password)
         hashed_pw = password_data['hash']
@@ -352,7 +350,7 @@ def register():
         users_ref.document(username).set(user_data)
         PRIVATE_KEYS[username] = private_key
         ECDHE_KEYS.pop(temp_token, None)
-
+        app.logger.info(f"🔑 [ML-DSA] Sinh khóa cho {username} khi đăng ký thành công")
         return jsonify({"message": "Đăng ký thành công"})
 
     except Exception as e:
@@ -507,7 +505,7 @@ def order():
                 "cost": float(cost),
                 "quantity": int(quantity),
                 "created_at": datetime.utcnow().isoformat(),
-                "status": "pending",
+                "status": "awaiting_confirmation",
                 "token": token
             })
 
@@ -520,14 +518,14 @@ def order():
         else:
             return jsonify({"error": "Internal server error"}), 500
 
-@app.route('/admin/orders')
-def admin_view_orders():
+@app.route('/seller/orders')
+def seller_view_orders():
     try:
-        if 'username' not in session or session.get('role') != 'admin':
+        if 'username' not in session or session.get('role') != 'seller':
             return redirect('/')
 
         if not db:
-            return render_template('admin_orders.html', orders=[], username=session['username'], error="Database connection failed")
+            return render_template('seller_orders.html', orders=[], username=session['username'], error="Database connection failed")
 
         # Get all orders from collection group "Orders"
         orders_query = db.collection_group("Orders").stream()
@@ -541,11 +539,11 @@ def admin_view_orders():
             data['username'] = username
             all_orders.append(data)
 
-        return render_template('admin_orders.html', orders=all_orders, username=session['username'])
+        return render_template('seller_orders.html', orders=all_orders, username=session['username'])
 
     except Exception as e:
-        print(f"Admin orders error: {e}")
-        return render_template('admin_orders.html', orders=[], username=session.get('username', ''), error="Internal server error")
+        print(f"Seller orders error: {e}")
+        return render_template('seller_orders.html', orders=[], username=session.get('username', ''), error="Internal server error")
 
 @app.route('/create_payment_url')
 def create_payment_url():
@@ -598,22 +596,6 @@ def create_payment_url():
             app.logger.warning("Redirect fallback tại bước 6")
             return redirect('/orders')
 
-        # # Tạo payment data để ký
-        # amount = float(order.get('cost', 0))
-        # payment_timestamp = int(time.time() * 1000) 
-        
-        # payment_data = {
-        #     "orderId": order_id,
-        #     "username": username,
-        #     "cost": amount,
-        #     "timestamp": payment_timestamp,
-        #     "productName": order.get('productname', ''),
-        #     "quantity": order.get('quantity', 1)
-        # }
-        # app.logger.debug(f"[🧾] payment_data = {json.dumps(payment_data, ensure_ascii=False, indent=2)}")
-
-        # # Ký dữ liệu thanh toán với ML-DSA
-        # signature = sign_payment_data(payment_data, username)
                 # ✅ Dùng lại bản đã ký được lưu ở bước trước
         signed_doc = db.collection("PaymentSecurityDrafts").document(order_id).get()
         if not signed_doc.exists:
@@ -638,7 +620,8 @@ def create_payment_url():
             flash('Chữ ký không hợp lệ. Vui lòng tạo lại đơn hàng.', 'error')
             app.logger.warning("Redirect fallback tại bước 8")
             return redirect('/orders')
-
+        else:
+            app.logger.info("✅ [ML-DSA] Chữ ký hợp lệ - cho phép thanh toán")
         amount = float(payment_data["cost"])
         payment_timestamp = int(payment_data["timestamp"])
 
@@ -687,7 +670,7 @@ def create_payment_url():
         })
         
         flash('Thanh toán được bảo mật bằng chữ ký số lượng tử ML-DSA', 'info')
-        app.logger.debug(f"Secure payment URL created with ML-DSA: {payment_url}")
+        app.logger.info(f"🔒 [VNPay] Đã tạo URL thanh toán bảo mật cho đơn hàng {order_id}")
         return redirect(payment_url)
         
     except Exception as e:
@@ -732,11 +715,13 @@ def payment_return():
         # ✅ Xác minh chữ ký ML-DSA
         is_valid = verify_payment_signature(payment_data, signature_b64, public_key_b64)
         if not is_valid:
-            app.logger.debug('Chữ ký không hợp lệ')
+            app.logger.warning("❌ [ML-DSA] Xác minh chữ ký KHÔNG hợp lệ khi thanh toán trả về")
             return redirect('/orders?payment_status=failed')
-        
+        else:
+            app.logger.info("✅ [ML-DSA] Xác minh chữ ký thanh toán thành công")
+
         if vnp_response_code != '00':
-            app.logger.debug('Thanh toán không thành công')
+            app.logger.warning("❌ [VNPay] Thanh toán thất bại từ phía VNPay")
             return redirect('/orders?payment_status=failed')
         
         # ✅ Cập nhật trạng thái vào bản ghi
@@ -818,7 +803,7 @@ def submit_signed_order():
             app.logger.warning(f"❌ ML-DSA verification failed for user: {username}")
             return jsonify({"error": "Chữ ký không hợp lệ"}), 400
 
-        app.logger.info(f"✅ ML-DSA signature verified successfully for user: {username}")
+        app.logger.info(f"✅ [ML-DSA] Khách hàng {username} đã ký và xác minh đơn {payment_data['orderId']} thành công")
        
         order_id = payment_data['orderId']
 
@@ -844,7 +829,138 @@ def submit_signed_order():
         app.logger.error(f"Error in /api/submit_signed_order: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route('/seller/confirm_order', methods=['POST'])
+def seller_confirm_order():
+    if 'username' not in session or session.get('role') != 'seller':
+        flash("Bạn không có quyền truy cập chức năng này.", "error")
+        return redirect('/seller/orders')  # hoặc về trang seller đang xem
 
+    try:
+        order_id = request.form.get('order_id')
+        username = request.form.get('username')  # chủ sở hữu đơn hàng
+
+        if not order_id or not username:
+            flash("Thiếu thông tin đơn hàng", "error")
+            return redirect('/seller/orders')
+
+        order_ref = db.collection('Orders').document(username).collection('Orders').document(order_id)
+        order_doc = order_ref.get()
+        if not order_doc.exists:
+            flash("Không tìm thấy đơn hàng", "error")
+            return redirect('/seller/orders')
+
+        order_data = order_doc.to_dict()
+        if order_data.get("status") != "awaiting_confirmation":
+            flash("Đơn hàng không ở trạng thái chờ xác nhận", "warning")
+            return redirect('/seller/orders')
+
+        # Cập nhật trạng thái sang pending (chờ thanh toán)
+        order_ref.update({
+            "status": "pending",
+            "confirmed_at": firestore.SERVER_TIMESTAMP
+        })
+
+        flash("✅ Đã xác nhận đơn hàng. Khách có thể thanh toán.", "success")
+        return redirect('/seller/orders')
+
+    except Exception as e:
+        app.logger.error(f"[❌] Lỗi khi xác nhận đơn hàng: {e}")
+        flash("Có lỗi xảy ra khi xác nhận đơn hàng", "error")
+        return redirect('/seller/orders')
+
+@app.route('/api/seller_confirm_order', methods=['POST'])
+def api_seller_confirm_order():
+    if 'username' not in session or session.get('role') != 'seller':
+        return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        data = request.get_json()
+        payload_str = data.get("payload")
+        signature_list = data.get("signature")
+        public_key_b64 = data.get("public_key")
+
+        if not payload_str or not signature_list or not public_key_b64:
+            return jsonify({"error": "Thiếu dữ liệu"}), 400
+
+        if not isinstance(signature_list, list):
+            return jsonify({"error": "Chữ ký không hợp lệ"}), 400
+
+        signature_bytes = bytes(signature_list)
+        public_key_bytes = base64.b64decode(public_key_b64)
+
+        app.logger.info(f"✍️ Payload: {payload_str}")
+        app.logger.info(f"📥 Signature (bytes): {len(signature_bytes)}")
+        app.logger.info("🔍 Verifying signature...")
+
+        sig = oqs.Signature("Dilithium2")
+        is_valid = sig.verify(payload_str.encode(), signature_bytes, public_key_bytes)
+
+        if not is_valid:
+            return jsonify({"error": "Chữ ký không hợp lệ"}), 400
+
+        payload = json.loads(payload_str)
+        order_id = payload.get("order_id")
+        customer_username = payload.get("username")
+
+        if not order_id or not customer_username:
+            return jsonify({"error": "Thiếu order_id hoặc username"}), 400
+
+        app.logger.info(f"✅ Chữ ký hợp lệ! Đơn hàng {order_id} xác nhận thành công.")
+
+        order_ref = db.collection("Orders").document(customer_username).collection("Orders").document(order_id)
+        if not order_ref.get().exists:
+            return jsonify({"error": "Không tìm thấy đơn hàng"}), 404
+
+        order_ref.update({
+            "status": "pending",
+            "seller_verified": True,
+            "seller_signature": base64.b64encode(signature_bytes).decode(),
+            "seller_pubkey": public_key_b64,
+            "confirmed_at": firestore.SERVER_TIMESTAMP
+        })
+        return jsonify({"success": True})
+    except Exception as e:
+        app.logger.error(f"[❌] Lỗi xác nhận đơn hàng bởi seller: {e}")
+        return jsonify({"error": "Lỗi server"}), 500
+
+@app.route('/api/verify_payment_signature_seller', methods=['POST'])
+def verify_payment_signature_seller_route():
+    if 'username' not in session or session.get('role') != 'seller':
+        return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        data = request.get_json()
+        order_id = data.get("order_id")
+        customer_username = data.get("username")
+
+        if not order_id or not customer_username:
+            return jsonify({"error": "Thiếu order_id hoặc username"}), 400
+
+        signed_order_ref = db.collection("PaymentSecurityDrafts").document(order_id)
+
+        doc = signed_order_ref.get()
+
+        if not doc.exists:
+            return jsonify({"error": "Không tìm thấy thông tin chữ ký"}), 404
+
+        signed_data = doc.to_dict()
+
+        payment_data = signed_data["data"]
+        signature_b64 = signed_data["signature"]
+        public_key_b64 = signed_data["public_key"]
+
+        is_valid = verify_payment_signature(payment_data, signature_b64, public_key_b64)
+
+        if is_valid:
+            app.logger.info(f"✅ [ML-DSA] Seller xác minh thành công chữ ký thanh toán từ customer {customer_username}")
+            return jsonify({"success": True})
+        else:
+            app.logger.warning("❌ [ML-DSA] Chữ ký không hợp lệ khi seller xác minh")
+            return jsonify({"success": False, "error": "Chữ ký không hợp lệ"}), 400
+        
+    except Exception as e:
+        app.logger.error(f"[❌] Lỗi khi seller xác minh chữ ký thanh toán: {e}")
+        return jsonify({"error": "Lỗi server"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

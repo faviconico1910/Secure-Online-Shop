@@ -31,13 +31,21 @@
                         </span>
                     </td>
                     <td>
-                        {% if order.status != 'resolved' %}
+                        {% if order.status == 'resolved' %}
+                            <button class="btn btn-secondary btn-sm" disabled style="cursor: not-allowed; opacity: 0.65;">
+                                <i class="bi bi-check-circle"></i> Đã thanh toán
+                            </button>
+                        {% elif order.status == 'pending' %}
                             <button class="btn btn-success btn-sm" onclick="showPaymentConfirm('{{ order.order_id }}', '{{ order.productname }}', '{{ order.cost }}', '{{ order.quantity }}')">
                                 <i class="bi bi-credit-card"></i> Thanh toán VNPay
                             </button>
+                        {% elif order.status == 'awaiting_confirmation' %}
+                            <button class="btn btn-warning btn-sm" disabled style="cursor: not-allowed; opacity: 0.7;">
+                                <i class="bi bi-hourglass-split"></i> Chờ người bán xác nhận
+                            </button>
                         {% else %}
-                            <button class="btn btn-secondary btn-sm" disabled style="cursor: not-allowed; opacity: 0.65;">
-                                <i class="bi bi-check-circle"></i> Đã thanh toán
+                            <button class="btn btn-secondary btn-sm" disabled style="cursor: not-allowed;">
+                                <i class="bi bi-question-circle"></i> Không rõ trạng thái
                             </button>
                         {% endif %}
                     </td>
